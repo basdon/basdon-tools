@@ -1,3 +1,6 @@
 **.class
 **.gxt
+/zoneviewer/**
+!/zoneviewer/map.png
+!/zoneviewer/*.cs
 
