@@ -59,7 +59,7 @@ namespace zv
 			list.Items.Clear();
 			List<Zone> zones = new List<Zone>();
 			string[] lines = txtentry.Text.Replace("\r\n", "\n").Split('\n');
-			int idx = -1;
+			int idx = 0;
 			foreach (string line in lines) {
 				idx++;
 				string[] parts = line.Split(new char[]{','}, 7);
