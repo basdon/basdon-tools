@@ -59,8 +59,9 @@ namespace zv
 			list.Items.Clear();
 			List<Zone> zones = new List<Zone>();
 			string[] lines = txtentry.Text.Replace("\r\n", "\n").Split('\n');
-			int idx = 0;
+			int idx = -1;
 			foreach (string line in lines) {
+				idx++;
 				string[] parts = line.Split(new char[]{','}, 7);
 				if (parts.Length != 7) {
 					continue;
@@ -75,7 +76,7 @@ namespace zv
 					z.z2 = float.Parse(parts[5].Trim());
 					z.name = parts[6].Trim();
 					zones.Add(z);
-					list.Items.Add(++idx + " " + z.name);
+					list.Items.Add(idx + " " + z.name);
 				} catch (Exception) {
 				}
 			}
