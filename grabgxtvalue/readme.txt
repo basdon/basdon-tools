@@ -6,7 +6,7 @@ javac grabgxtvalue.java
 
 Usage
 -----
--Dgxtentry: entries separated with a comma, either in text format or numerical (base 10 or base16 (can have 0x prefix))
+-Dgxtentry: entries separated with a comma, either in text format or numerical (base 10 or base16 with 0x prefix)
 -Dgxtpath: path to gxt file, can be absolute or relative to working dir
 -Ddebug: debug output
 

@@ -39,19 +39,17 @@ public class grabgxtvalue
 				search[i] = Integer.parseInt(name);
 			} catch (Exception e) {
 				try {
-					final String normalisedentry;
-					if (entryname.startsWith("0x") || name.startsWith("0X")) {
-						normalisedentry = name.substring(2);
-					} else {
-						normalisedentry = name;
+					if (name.startsWith("0x") || name.startsWith("0X")) {
+						search[i] = Integer.parseInt(name.substring(2), 16);
 					}
-					search[i] = Integer.parseInt(normalisedentry, 16);
 				} catch (Exception e2) {
-					final CRC32 crc = new CRC32();
-					final byte[] b = name.getBytes(StandardCharsets.US_ASCII);
-					crc.update(b, 0, b.length);
-					search[i] = (int) (4294967295L - crc.getValue());
 				}
+			}
+			if (search[i] == 0) {
+				final CRC32 crc = new CRC32();
+				final byte[] b = name.getBytes(StandardCharsets.US_ASCII);
+				crc.update(b, 0, b.length);
+				search[i] = (int) (4294967295L - crc.getValue());
 			}
 			dprintfln("'%s' CRC is %08X", name, search[i]);
 		}
