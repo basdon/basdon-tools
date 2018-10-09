@@ -92,6 +92,7 @@ namespace zv
 			this.Controls.Add(this.label1);
 			this.Controls.Add(this.txtentry);
 			this.Controls.Add(this.img);
+			this.MaximumSize = new System.Drawing.Size(20000, 20000);
 			this.MinimumSize = new System.Drawing.Size(892, 656);
 			this.Name = "zv";
 			this.Text = "Form1";
