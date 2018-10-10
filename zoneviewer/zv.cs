@@ -118,7 +118,7 @@ namespace zv
 
 		private void list_KeyUp(object sender, KeyEventArgs e)
 		{
-			if (e.KeyCode == Keys.Delete && list.SelectedIndex > 0) {
+			if (e.KeyCode == Keys.Delete && list.SelectedIndex >= 0) {
 				zones.RemoveAt(list.SelectedIndex);
 				string[] lines = new string[zones.Count];
 				for (int i = 0; i < lines.Length; i++) {
