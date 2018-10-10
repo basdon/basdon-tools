@@ -27,7 +27,7 @@ namespace zv
 		class Zone
 		{
 			public float x1, y1, z1, x2, y2, z2;
-			public string name;
+			public string name, line;
 		}
 
 
@@ -56,8 +56,9 @@ namespace zv
 
 		private void txtentry_TextChanged(object sender, EventArgs e)
 		{
-			list.Items.Clear();
-			List<Zone> zones = new List<Zone>();
+			int listidx = list.SelectedIndex;
+			List<string> listitems = new List<string>();
+			zones.Clear();
 			string[] lines = txtentry.Text.Replace("\r\n", "\n").Split('\n');
 			int idx = 0;
 			foreach (string line in lines) {
@@ -75,12 +76,15 @@ namespace zv
 					z.y2 = -float.Parse(parts[4].Trim());
 					z.z2 = float.Parse(parts[5].Trim());
 					z.name = parts[6].Trim();
+					z.line = line;
 					zones.Add(z);
-					list.Items.Add(idx + " " + z.name);
+					listitems.Add(idx + " " + z.name);
 				} catch (Exception) {
 				}
 			}
-			this.zones = zones;
+			list.Items.Clear();
+			list.Items.AddRange(listitems.ToArray());
+			list.SelectedIndex = Math.Min(listitems.Count - 1, listidx);
 			img.Refresh();
 		}
 
@@ -110,6 +114,19 @@ namespace zv
 		private void list_SelectedIndexChanged(object sender, EventArgs e)
 		{
 			img.Refresh();
+		}
+
+		private void list_KeyUp(object sender, KeyEventArgs e)
+		{
+			if (e.KeyCode == Keys.Delete && list.SelectedIndex > 0) {
+				zones.RemoveAt(list.SelectedIndex);
+				string[] lines = new string[zones.Count];
+				for (int i = 0; i < lines.Length; i++) {
+					lines[i] = zones[i].line;
+				}
+				txtentry.Text = string.Join("\n", lines);
+				txtentry_TextChanged(null, null);
+			}
 		}
 	}
 }

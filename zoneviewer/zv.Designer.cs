@@ -82,6 +82,7 @@ namespace zv
 			this.list.Size = new System.Drawing.Size(254, 308);
 			this.list.TabIndex = 3;
 			this.list.SelectedIndexChanged += new System.EventHandler(this.list_SelectedIndexChanged);
+			this.list.KeyUp += new System.Windows.Forms.KeyEventHandler(this.list_KeyUp);
 			// 
 			// zv
 			// 
