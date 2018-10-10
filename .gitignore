@@ -3,4 +3,5 @@
 /zoneviewer/**
 !/zoneviewer/map.png
 !/zoneviewer/*.cs
+!/zoneviewer/readme.txt
 
