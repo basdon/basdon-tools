@@ -4,4 +4,5 @@
 !/zoneviewer/map.png
 !/zoneviewer/*.cs
 !/zoneviewer/readme.txt
-
+/map-construction-editor-tools/*
+!/map-construction-editor-tools/*.c
