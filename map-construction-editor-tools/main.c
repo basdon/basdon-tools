@@ -2,9 +2,25 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
-#define IDC_MAIN_EDIT 101
+#define SIDEBARSIZE (150)
+#define SIDEBARSIZEEX (SIDEBARSIZE + 16)
+
+#define IDC_TEXT 101
+#define IDC_COPY 102
+#define IDC_PAST 103
 
 HWND hEdit;
+WNDPROC actualEditWndProc;
+
+/* purely so all text gets selected on ctrl+a */
+LRESULT CALLBACK EditWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+	if (msg == WM_CHAR && wParam == 1) {
+		SendMessage(hwnd, EM_SETSEL, 0, -1);
+		return 1;
+	}
+	return CallWindowProc(actualEditWndProc, hwnd, msg, wParam, lParam);
+}
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -14,29 +30,82 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	{
 		HFONT hfDefault;
 		NONCLIENTMETRICS ncm;
+		HMODULE modulehandle;
+		HWND button;
 
 		ncm.cbSize = sizeof(ncm);
 		SystemParametersInfo(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
 		hfDefault = CreateFontIndirect(&(ncm.lfMessageFont));
 
-		hEdit = CreateWindowEx(
-			WS_EX_CLIENTEDGE, "EDIT", "",
+		modulehandle = GetModuleHandleA(NULL);
+		button = CreateWindowExA(0, "Button", "Paste from clipboard", WS_CHILD | WS_VISIBLE,
+			8, 8, SIDEBARSIZE, 25, hwnd, (HMENU) IDC_PAST, modulehandle, NULL);
+		SendMessage(button, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
+		button = CreateWindowExA(0, "Button", "Copy to clipboard", WS_CHILD | WS_VISIBLE,
+			8, 25 + 16, SIDEBARSIZE, 25, hwnd, (HMENU) IDC_COPY, modulehandle, NULL);
+		SendMessage(button, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
+		hEdit = CreateWindowExA(
+			WS_EX_CLIENTEDGE, "Edit", "",
 			WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_HSCROLL | ES_MULTILINE |
 			ES_AUTOVSCROLL | ES_AUTOHSCROLL,
-			0, 0, 100, 100, hwnd, (HMENU) IDC_MAIN_EDIT, GetModuleHandle(NULL), NULL);
+			SIDEBARSIZEEX, 8, 100, 100, hwnd, (HMENU) IDC_TEXT, modulehandle, NULL);
 		SendMessage(hEdit, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
+		actualEditWndProc = (WNDPROC) SetWindowLong(hEdit, GWL_WNDPROC, (LONG) &EditWndProc);
 		break;
 	}
 	case WM_SIZE:
 	{
-
 		RECT rcClient;
 
 		GetClientRect(hwnd, &rcClient);
 		/*hEdit = GetDlgItem(hwnd, IDC_MAIN_EDIT);*/
-		SetWindowPos(hEdit, NULL, 0, 0, rcClient.right, rcClient.bottom, SWP_NOZORDER);
+		SetWindowPos(hEdit, NULL,
+			0, 0, rcClient.right - SIDEBARSIZEEX - 8, rcClient.bottom - 16,
+			SWP_NOZORDER | SWP_NOMOVE);
 		break;
 	}
+	case WM_COMMAND:
+		switch (LOWORD(wParam)) {
+		case IDC_PAST:
+		{
+			HANDLE hData;
+			char *txt;
+			if (OpenClipboard(NULL)) {
+				hData = GetClipboardData(CF_TEXT);
+				if (hData) {
+					txt = GlobalLock(hData);
+					if (txt) {
+						GlobalUnlock(txt);
+						SetWindowTextA(hEdit, txt);
+						CloseClipboard();
+					}
+				}
+			}
+			break;
+		}
+		case IDC_COPY:
+		{
+			HGLOBAL hMem;
+			char *txt;
+			int len;
+			len = GetWindowTextLengthA(hEdit) + 1;
+			hMem = GlobalAlloc(GMEM_MOVEABLE, len);
+			if (hMem) {
+				txt = GlobalLock(hMem);
+				if (txt) {
+					GetWindowTextA(hEdit, txt, len);
+					GlobalUnlock(hMem);
+					if (OpenClipboard(NULL)) {
+						EmptyClipboard();
+						SetClipboardData(CF_TEXT, hMem);
+						CloseClipboard();
+					}
+				}
+			}
+			break;
+		}
+		}
+		break;
 	case WM_CLOSE: DestroyWindow(hwnd); break;
 	case WM_DESTROY: PostQuitMessage(0); break;
 	default: return DefWindowProc(hwnd, msg, wParam, lParam);
@@ -73,7 +142,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		wc.lpszClassName,
 		"title",
 		WS_OVERLAPPEDWINDOW,
-		CW_USEDEFAULT, CW_USEDEFAULT, 240, 120,
+		CW_USEDEFAULT, CW_USEDEFAULT, 640, 448,
 		NULL, NULL, hInstance, NULL
 	);
 	if (hwnd == NULL) {
