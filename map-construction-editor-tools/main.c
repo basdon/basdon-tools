@@ -51,6 +51,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			SIDEBARSIZEEX, 8, 100, 100, hwnd, (HMENU) IDC_TEXT, modulehandle, NULL);
 		SendMessage(hEdit, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
 		actualEditWndProc = (WNDPROC) SetWindowLong(hEdit, GWL_WNDPROC, (LONG) &EditWndProc);
+		/* send a msg that paste from clipboard button was clicked */
+		PostMessageA(hwnd, WM_COMMAND, MAKEWPARAM(IDC_PAST, 0), 0);
 		break;
 	}
 	case WM_SIZE:
