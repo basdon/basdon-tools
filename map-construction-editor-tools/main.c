@@ -1,15 +1,19 @@
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <stdio.h>
 
+#define PAD (8)
+#define PAD2 (PAD+PAD)
 #define SIDEBARSIZE (150)
-#define SIDEBARSIZEEX (SIDEBARSIZE + 16)
+#define SIDEBARSIZEEX (SIDEBARSIZE + PAD2)
 
 #define IDC_TEXT 101
 #define IDC_COPY 102
 #define IDC_PAST 103
+#define IDC_LABL 104
 
-HWND hEdit;
+HWND hEdit, hLabel;
 WNDPROC actualEditWndProc;
 
 /* purely so all text gets selected on ctrl+a */
@@ -31,23 +35,27 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		HFONT hfDefault;
 		NONCLIENTMETRICS ncm;
 		HMODULE modulehandle;
-		HWND button;
+		HWND control;
+		int y = PAD, h;
 
 		ncm.cbSize = sizeof(ncm);
 		SystemParametersInfo(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
 		hfDefault = CreateFontIndirect(&(ncm.lfMessageFont));
 
 		modulehandle = GetModuleHandleA(NULL);
-		button = CreateWindowExA(0, "Button", "Paste from clipboard", WS_CHILD | WS_VISIBLE,
-			8, 8, SIDEBARSIZE, 25, hwnd, (HMENU) IDC_PAST, modulehandle, NULL);
-		SendMessage(button, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
-		button = CreateWindowExA(0, "Button", "Copy to clipboard", WS_CHILD | WS_VISIBLE,
-			8, 25 + 16, SIDEBARSIZE, 25, hwnd, (HMENU) IDC_COPY, modulehandle, NULL);
-		SendMessage(button, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
+		hLabel = CreateWindowExA(0, "Static", "-", WS_CHILD | WS_VISIBLE | SS_LEFT,
+			PAD, y, SIDEBARSIZE, h = 18, hwnd, (HMENU) IDC_LABL, modulehandle, NULL);
+		SendMessage(hLabel, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
+		control = CreateWindowExA(0, "Button", "Paste from clipboard", WS_CHILD | WS_VISIBLE,
+			PAD, y += h + PAD, SIDEBARSIZE, h = 25, hwnd, (HMENU) IDC_PAST, modulehandle, NULL);
+		SendMessage(control, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
+		control = CreateWindowExA(0, "Button", "Copy to clipboard", WS_CHILD | WS_VISIBLE,
+			8, y += h + PAD, SIDEBARSIZE, h = 25, hwnd, (HMENU) IDC_COPY, modulehandle, NULL);
+		SendMessage(control, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
 		hEdit = CreateWindowExA(
 			WS_EX_CLIENTEDGE, "Edit", "",
 			WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_HSCROLL | ES_MULTILINE |
-			ES_AUTOVSCROLL | ES_AUTOHSCROLL,
+			ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_WANTRETURN,
 			SIDEBARSIZEEX, 8, 100, 100, hwnd, (HMENU) IDC_TEXT, modulehandle, NULL);
 		SendMessage(hEdit, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
 		actualEditWndProc = (WNDPROC) SetWindowLong(hEdit, GWL_WNDPROC, (LONG) &EditWndProc);
@@ -68,20 +76,30 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	}
 	case WM_COMMAND:
 		switch (LOWORD(wParam)) {
+		case IDC_TEXT:
+		{
+			int linecount;
+			char buf[40];
+			if (HIWORD(wParam) == EN_CHANGE) {
+				linecount = SendMessageA(hEdit, EM_GETLINECOUNT, 0, 0);
+				sprintf_s(buf, sizeof(buf), "%d object(s)", linecount);
+				SetWindowTextA(hLabel, buf);
+			}
+			break;
+		}
 		case IDC_PAST:
 		{
 			HANDLE hData;
 			char *txt;
-			if (OpenClipboard(NULL)) {
-				hData = GetClipboardData(CF_TEXT);
-				if (hData) {
-					txt = GlobalLock(hData);
-					if (txt) {
-						GlobalUnlock(txt);
-						SetWindowTextA(hEdit, txt);
-						CloseClipboard();
-					}
-				}
+			if (OpenClipboard(NULL) &&
+				(hData = GetClipboardData(CF_TEXT)) &&
+				(txt = GlobalLock(hData)))
+			{
+				GlobalUnlock(txt);
+				SetWindowTextA(hEdit, txt);
+				/* send a msg that the text was changed */
+				PostMessageA(hwnd, WM_COMMAND, MAKEWPARAM(IDC_TEXT, EN_CHANGE), 0);
+				CloseClipboard();
 			}
 			break;
 		}
@@ -91,17 +109,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			char *txt;
 			int len;
 			len = GetWindowTextLengthA(hEdit) + 1;
-			hMem = GlobalAlloc(GMEM_MOVEABLE, len);
-			if (hMem) {
-				txt = GlobalLock(hMem);
-				if (txt) {
-					GetWindowTextA(hEdit, txt, len);
-					GlobalUnlock(hMem);
-					if (OpenClipboard(NULL)) {
-						EmptyClipboard();
-						SetClipboardData(CF_TEXT, hMem);
-						CloseClipboard();
-					}
+			if ((hMem = GlobalAlloc(GMEM_MOVEABLE, len)) &&
+				(txt = GlobalLock(hMem)))
+			{
+				GetWindowTextA(hEdit, txt, len);
+				GlobalUnlock(hMem);
+				if (OpenClipboard(NULL)) {
+					EmptyClipboard();
+					SetClipboardData(CF_TEXT, hMem);
+					CloseClipboard();
 				}
 			}
 			break;
