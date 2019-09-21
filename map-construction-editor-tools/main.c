@@ -7,75 +7,141 @@
 #define PAD2 (PAD+PAD)
 #define SIDEBARSIZE (150)
 #define SIDEBARSIZEEX (SIDEBARSIZE + PAD2)
+#define BULKWINWIDTH 400
+
+#define WIN_MAIN 50
+#define WIN_BULK 51
 
 #define IDC_TEXT 101
 #define IDC_COPY 102
 #define IDC_PAST 103
 #define IDC_LABL 104
+#define IDC_CHAI 105
+#define IDC_CHAX 106
+#define IDC_CHAY 107
+#define IDC_CHAZ 108
 
-HWND hEdit, hLabel;
+int window_being_created;
+HINSTANCE hInstance4windows;
+HFONT hfDefault;
+HMODULE modulehandle;
+WNDCLASSEX wc;
+HWND hMain, hBulkedit = NULL, hEdit, hLabel;
 WNDPROC actualEditWndProc;
+
+void showBulkEdit()
+{
+	MSG msg;
+	RECT mainpos;
+
+	GetWindowRect(hMain, &mainpos);
+	window_being_created = WIN_BULK;
+	hBulkedit = CreateWindowEx(
+		0,
+		wc.lpszClassName,
+		"Bulk edit",
+		WS_OVERLAPPEDWINDOW & ~(WS_MAXIMIZEBOX | WS_MINIMIZEBOX),
+		(mainpos.left + mainpos.right - BULKWINWIDTH) / 2,
+		(mainpos.top + mainpos.bottom - BULKWINWIDTH) / 2,
+		BULKWINWIDTH, BULKWINWIDTH,
+		hMain, NULL, hInstance4windows, NULL
+	);
+	if (hBulkedit == NULL) {
+		MessageBox(NULL, "failed window creation", "err", MB_ICONEXCLAMATION | MB_OK);
+		return;
+	}
+
+	ShowWindow(hBulkedit, SW_SHOWNORMAL);
+	UpdateWindow(hBulkedit);
+	EnableWindow(hMain, FALSE);
+}
 
 /* purely so all text gets selected on ctrl+a */
 LRESULT CALLBACK EditWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
-	if (msg == WM_CHAR && wParam == 1) {
+	if (msg == WM_CHAR && wParam == 'A' - 64) {
 		SendMessage(hwnd, EM_SETSEL, 0, -1);
 		return 1;
 	}
 	return CallWindowProc(actualEditWndProc, hwnd, msg, wParam, lParam);
 }
 
+void CreateBulkWindow(HWND hwnd)
+{
+}
+
+void CreateMainWindow(HWND hwnd)
+{
+	HWND control;
+	int y = PAD, h;
+
+	hLabel = CreateWindowExA(0, "Static", "-", WS_CHILD | WS_VISIBLE | SS_LEFT,
+		PAD, y, SIDEBARSIZE, h = 18, hwnd, (HMENU) IDC_LABL, modulehandle, NULL);
+	SendMessage(hLabel, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
+	control = CreateWindowExA(0, "Button", "Paste from clipboard", WS_CHILD | WS_VISIBLE,
+		PAD, y += h + PAD, SIDEBARSIZE, h = 25, hwnd, (HMENU) IDC_PAST, modulehandle, NULL);
+	SendMessage(control, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
+	control = CreateWindowExA(0, "Button", "Copy to clipboard", WS_CHILD | WS_VISIBLE,
+		PAD, y += h + PAD, SIDEBARSIZE, h = 25, hwnd, (HMENU) IDC_COPY, modulehandle, NULL);
+	SendMessage(control, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
+	control = CreateWindowExA(0, "Button", "Bulk change ID", WS_CHILD | WS_VISIBLE,
+		PAD, y += h + PAD, SIDEBARSIZE, h = 25, hwnd, (HMENU) IDC_CHAI, modulehandle, NULL);
+	SendMessage(control, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
+	control = CreateWindowExA(0, "Button", "Bulk change X", WS_CHILD | WS_VISIBLE,
+		PAD, y += h + PAD, SIDEBARSIZE, h = 25, hwnd, (HMENU) IDC_CHAX, modulehandle, NULL);
+	SendMessage(control, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
+	control = CreateWindowExA(0, "Button", "Bulk change Y", WS_CHILD | WS_VISIBLE,
+		PAD, y += h + PAD, SIDEBARSIZE, h = 25, hwnd, (HMENU) IDC_CHAY, modulehandle, NULL);
+	SendMessage(control, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
+	control = CreateWindowExA(0, "Button", "Bulk change Z", WS_CHILD | WS_VISIBLE,
+		PAD, y += h + PAD, SIDEBARSIZE, h = 25, hwnd, (HMENU) IDC_CHAZ, modulehandle, NULL);
+	SendMessage(control, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
+	hEdit = CreateWindowExA(
+		WS_EX_CLIENTEDGE, "Edit", "",
+		WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_HSCROLL | ES_MULTILINE |
+		ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_WANTRETURN,
+		SIDEBARSIZEEX, 8, 100, 100, hwnd, (HMENU) IDC_TEXT, modulehandle, NULL);
+	SendMessage(hEdit, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
+	actualEditWndProc = (WNDPROC) SetWindowLong(hEdit, GWL_WNDPROC, (LONG) &EditWndProc);
+	/* send a msg that paste from clipboard button was clicked */
+	PostMessageA(hwnd, WM_COMMAND, MAKEWPARAM(IDC_PAST, 0), 0);
+}
+
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	switch (msg)
 	{
-	case WM_CREATE:
-	{
-		HFONT hfDefault;
-		NONCLIENTMETRICS ncm;
-		HMODULE modulehandle;
-		HWND control;
-		int y = PAD, h;
-
-		ncm.cbSize = sizeof(ncm);
-		SystemParametersInfo(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
-		hfDefault = CreateFontIndirect(&(ncm.lfMessageFont));
-
-		modulehandle = GetModuleHandleA(NULL);
-		hLabel = CreateWindowExA(0, "Static", "-", WS_CHILD | WS_VISIBLE | SS_LEFT,
-			PAD, y, SIDEBARSIZE, h = 18, hwnd, (HMENU) IDC_LABL, modulehandle, NULL);
-		SendMessage(hLabel, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
-		control = CreateWindowExA(0, "Button", "Paste from clipboard", WS_CHILD | WS_VISIBLE,
-			PAD, y += h + PAD, SIDEBARSIZE, h = 25, hwnd, (HMENU) IDC_PAST, modulehandle, NULL);
-		SendMessage(control, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
-		control = CreateWindowExA(0, "Button", "Copy to clipboard", WS_CHILD | WS_VISIBLE,
-			8, y += h + PAD, SIDEBARSIZE, h = 25, hwnd, (HMENU) IDC_COPY, modulehandle, NULL);
-		SendMessage(control, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
-		hEdit = CreateWindowExA(
-			WS_EX_CLIENTEDGE, "Edit", "",
-			WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_HSCROLL | ES_MULTILINE |
-			ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_WANTRETURN,
-			SIDEBARSIZEEX, 8, 100, 100, hwnd, (HMENU) IDC_TEXT, modulehandle, NULL);
-		SendMessage(hEdit, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
-		actualEditWndProc = (WNDPROC) SetWindowLong(hEdit, GWL_WNDPROC, (LONG) &EditWndProc);
-		/* send a msg that paste from clipboard button was clicked */
-		PostMessageA(hwnd, WM_COMMAND, MAKEWPARAM(IDC_PAST, 0), 0);
+	case WM_KEYDOWN:
+		if (wParam == VK_ESCAPE && hBulkedit) {
+			PostMessage(hBulkedit, WM_CLOSE, 0, 0);
+		}
 		break;
-	}
+	case WM_CREATE:
+		if (window_being_created == WIN_MAIN) {
+			CreateMainWindow(hwnd);
+		} else if (window_being_created == WIN_BULK) {
+			CreateBulkWindow(hwnd);
+		}
+		window_being_created = 0;
+		break;
 	case WM_SIZE:
 	{
 		RECT rcClient;
 
-		GetClientRect(hwnd, &rcClient);
-		/*hEdit = GetDlgItem(hwnd, IDC_MAIN_EDIT);*/
-		SetWindowPos(hEdit, NULL,
-			0, 0, rcClient.right - SIDEBARSIZEEX - 8, rcClient.bottom - 16,
-			SWP_NOZORDER | SWP_NOMOVE);
+		if (hwnd == hMain) {
+			GetClientRect(hwnd, &rcClient);
+			/*hEdit = GetDlgItem(hwnd, IDC_MAIN_EDIT);*/
+			SetWindowPos(hEdit, NULL,
+				0, 0, rcClient.right - SIDEBARSIZEEX - PAD, rcClient.bottom - PAD2,
+				SWP_NOZORDER | SWP_NOMOVE);
+		}
 		break;
 	}
 	case WM_COMMAND:
 		switch (LOWORD(wParam)) {
+		case IDC_CHAI:
+			showBulkEdit();
+			break;
 		case IDC_TEXT:
 		{
 			int linecount;
@@ -124,8 +190,19 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		}
 		}
 		break;
-	case WM_CLOSE: DestroyWindow(hwnd); break;
-	case WM_DESTROY: PostQuitMessage(0); break;
+	case WM_CLOSE:
+		if (hwnd == hBulkedit) {
+			EnableWindow(hMain, TRUE);
+		}
+		DestroyWindow(hwnd);
+		break;
+	case WM_DESTROY:
+		if (hwnd == hMain) {
+			PostQuitMessage(0);
+		} else if (hwnd == hBulkedit) {
+			hBulkedit = NULL;
+		}
+		break;
 	default: return DefWindowProc(hwnd, msg, wParam, lParam);
 	}
 	return 0;
@@ -133,9 +210,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
-	WNDCLASSEX wc;
-	HWND hwnd;
 	MSG msg;
+	NONCLIENTMETRICS ncm;
+
+	hInstance4windows = hInstance;
+
+	ncm.cbSize = sizeof(ncm);
+	SystemParametersInfo(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
+	hfDefault = CreateFontIndirect(&(ncm.lfMessageFont));
+	modulehandle = GetModuleHandleA(NULL);
 
 	wc.cbSize = sizeof(WNDCLASSEX);
 	wc.style = 0;
@@ -155,21 +238,22 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		return 0;
 	}
 
-	hwnd = CreateWindowEx(
+	window_being_created = WIN_MAIN;
+	hMain = CreateWindowEx(
 		0,
 		wc.lpszClassName,
 		"title",
 		WS_OVERLAPPEDWINDOW,
-		CW_USEDEFAULT, CW_USEDEFAULT, 640, 448,
+		CW_USEDEFAULT, CW_USEDEFAULT, 800, 448,
 		NULL, NULL, hInstance, NULL
 	);
-	if (hwnd == NULL) {
+	if (hMain == NULL) {
 		MessageBox(NULL, "failed window creation", "err", MB_ICONEXCLAMATION | MB_OK);
 		return 0;
 	}
 
-	ShowWindow(hwnd, nCmdShow);
-	UpdateWindow(hwnd);
+	ShowWindow(hMain, nCmdShow);
+	UpdateWindow(hMain);
 
 	while (GetMessage(&msg, NULL, 0, 0) > 0) {
 		TranslateMessage(&msg);
