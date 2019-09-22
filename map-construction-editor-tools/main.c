@@ -48,14 +48,14 @@ void showBulkEdit()
 	RECT mainpos;
 	int selstart, selend, linestart, lineend;
 	int numobjects, i;
-	int lineindex, linelen;
+	int linelen;
 	char *linecontent;
 	int parseidx;
 	char parsingvalue[100], *c, *p;
 	float values[7], x;
 	int valueidx, invalue;
 	const int numvalues = sizeof(values)/sizeof(values[0]);
-	struct OBJECT *objects;
+	struct OBJECT *objects, *o;
 
 	SendMessage(hEdit, EM_GETSEL, (WPARAM) &selstart, (LPARAM) &selend);
 	if (selstart <= 0 && selend <= 0) {
@@ -65,16 +65,23 @@ void showBulkEdit()
 	linestart = SendMessage(hEdit, EM_LINEFROMCHAR, (WPARAM) selstart, 0);
 	lineend = SendMessage(hEdit, EM_LINEFROMCHAR, (WPARAM) selend, 0);
 	numobjects = i = lineend - linestart + 1;
-	objects = (struct OBJECT*) malloc(numobjects * sizeof(struct OBJECT));
+	o = objects = (struct OBJECT*) malloc(numobjects * sizeof(struct OBJECT));
 	if (!objects) {
 		ERRMSG(hMain, "Memory allocation failed");
 		return;
 	}
 	while (i-- > 0) {
-		lineindex = SendMessage(hEdit, EM_LINEINDEX, linestart + i, 0);
+		/*meanwhile set selstart to first index of first selected line,
+		  selend to last index of last selected line, hence selstart and
+		  selend a few lines below*/
+		selstart = SendMessage(hEdit, EM_LINEINDEX, linestart + i, 0);
+		linelen = SendMessage(hEdit, EM_LINELENGTH, (WPARAM) selstart, 0);
+		if (i + 1 == numobjects) {
+			selend = selstart + linelen;
+		}
 		/*linelen + 2 because first DWORD must be set to the size of the buffer
 		  that we'll allocate next (also zero terminator)*/
-		linelen = SendMessage(hEdit, EM_LINELENGTH, (WPARAM) lineindex, 0) + 2;
+		linelen += 2;
 		linecontent = (char*) malloc(linelen * sizeof(TCHAR));
 		if (!linecontent) {
 			free(objects);
@@ -112,13 +119,14 @@ void showBulkEdit()
 			free(objects);
 			return;
 		}
-		objects[i].id = (int) values[0];
-		objects[i].x = values[1];
-		objects[i].y = values[2];
-		objects[i].z = values[3];
-		objects[i].rx = values[4];
-		objects[i].ry = values[5];
-		objects[i].rz = values[6];
+		o->id = (int) values[0];
+		o->x = values[1];
+		o->y = values[2];
+		o->z = values[3];
+		o->rx = values[4];
+		o->ry = values[5];
+		o->rz = values[6];
+		o++;
 	}
 
 	GetWindowRect(hMain, &mainpos);
@@ -142,6 +150,31 @@ void showBulkEdit()
 	ShowWindow(hBulkedit, SW_SHOWNORMAL);
 	UpdateWindow(hBulkedit);
 	EnableWindow(hMain, FALSE);
+
+	while (GetMessage(&msg, NULL, 0, 0) > 0) {
+		TranslateMessage(&msg);
+		DispatchMessage(&msg);
+		if (hBulkedit == NULL) {
+			break; /*go back to other message loop*/
+		}
+	}
+
+	p = c = (char*) malloc((selend - selstart) * 2 * sizeof(char));
+	if (c) {
+		o = objects + numobjects;
+		parseidx = 0;
+		while (o-- != objects) {
+			parseidx += sprintf_s(c + parseidx, 100,
+				"CreateObject(%d, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f);\r\n",
+				o->id, o->x, o->y, o->z, o->rx, o->ry, o->rz);
+		}
+		SetFocus(hEdit);
+		SendMessage(hEdit, EM_SETSEL, selstart, selend + 2);
+		SendMessage(hEdit, EM_REPLACESEL, FALSE, (LPARAM) c);
+	} else {
+		ERRMSG(hMain, "Memory allocation failed");
+	}
+
 	free(objects);
 }
 
