@@ -6,3 +6,4 @@
 !/zoneviewer/readme.txt
 /map-construction-editor-tools/*
 !/map-construction-editor-tools/*.c
+!/map-construction-editor-tools/*.txt

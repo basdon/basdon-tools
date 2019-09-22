@@ -2,6 +2,10 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <stdio.h>
+#include <math.h>
+
+#define ERRMSG(parent,text) MessageBoxA(parent,text,"oops",MB_ICONWARNING|MB_OK)
+#define spr(...) sprintf_s(message,sizeof(message),__VA_ARGS__)
 
 #define PAD (8)
 #define PAD2 (PAD+PAD)
@@ -21,6 +25,15 @@
 #define IDC_CHAY 107
 #define IDC_CHAZ 108
 
+struct OBJECT
+{
+	int id;
+	float x, y, z;
+	float rx, ry, rz;
+};
+
+char message[200];
+
 int window_being_created;
 HINSTANCE hInstance4windows;
 HFONT hfDefault;
@@ -33,6 +46,80 @@ void showBulkEdit()
 {
 	MSG msg;
 	RECT mainpos;
+	int selstart, selend, linestart, lineend;
+	int numobjects, i;
+	int lineindex, linelen;
+	char *linecontent;
+	int parseidx;
+	char parsingvalue[100], *c, *p;
+	float values[7], x;
+	int valueidx, invalue;
+	const int numvalues = sizeof(values)/sizeof(values[0]);
+	struct OBJECT *objects;
+
+	SendMessage(hEdit, EM_GETSEL, (WPARAM) &selstart, (LPARAM) &selend);
+	if (selstart <= 0 && selend <= 0) {
+		ERRMSG(hMain, "No selection, select some lines and try again.");
+		return;
+	}
+	linestart = SendMessage(hEdit, EM_LINEFROMCHAR, (WPARAM) selstart, 0);
+	lineend = SendMessage(hEdit, EM_LINEFROMCHAR, (WPARAM) selend, 0);
+	numobjects = i = lineend - linestart + 1;
+	objects = (struct OBJECT*) malloc(numobjects * sizeof(struct OBJECT));
+	if (!objects) {
+		ERRMSG(hMain, "Memory allocation failed");
+		return;
+	}
+	while (i-- > 0) {
+		lineindex = SendMessage(hEdit, EM_LINEINDEX, linestart + i, 0);
+		/*linelen + 2 because first DWORD must be set to the size of the buffer
+		  that we'll allocate next (also zero terminator)*/
+		linelen = SendMessage(hEdit, EM_LINELENGTH, (WPARAM) lineindex, 0) + 2;
+		linecontent = (char*) malloc(linelen * sizeof(TCHAR));
+		if (!linecontent) {
+			free(objects);
+			ERRMSG(hMain, "Memory allocation failed");
+			return;
+		}
+		/*set first WORD in buffer to the buffer size*/
+		*((WORD*) linecontent) = (WORD) linelen;
+		SendMessage(hEdit, EM_GETLINE, linestart + i, (LPARAM) linecontent);
+		linecontent[linelen - 2] = 0; /*EM_GETLINE does not add zero term*/
+		parseidx = valueidx = -1;
+		invalue = 0;
+		while (*(c = linecontent + ++parseidx) != 0) {
+			if (*c == '.' || *c == '-' || ('0' <= *c && *c <= '9')) {
+				if (!invalue) {
+					invalue = 1;
+					p = parsingvalue;
+				}
+				*(p++) = *c;
+			} else {
+				if (invalue) {
+					invalue = 0;
+					*p = 0;
+					values[++valueidx] = (float) atof(parsingvalue);
+					if (valueidx >= numvalues) {
+						break;
+					}
+				}
+			}
+
+		}
+		free(linecontent);
+		if (valueidx != numvalues - 1) {
+			spr("invalid line, expected %d values but got %d", numvalues, valueidx);
+			free(objects);
+			return;
+		}
+		objects[i].id = (int) values[0];
+		objects[i].x = values[1];
+		objects[i].y = values[2];
+		objects[i].z = values[3];
+		objects[i].rx = values[4];
+		objects[i].ry = values[5];
+		objects[i].rz = values[6];
+	}
 
 	GetWindowRect(hMain, &mainpos);
 	window_being_created = WIN_BULK;
@@ -47,13 +134,15 @@ void showBulkEdit()
 		hMain, NULL, hInstance4windows, NULL
 	);
 	if (hBulkedit == NULL) {
-		MessageBox(NULL, "failed window creation", "err", MB_ICONEXCLAMATION | MB_OK);
+		ERRMSG(NULL, "Window creation failed.");
+		free(objects);
 		return;
 	}
 
 	ShowWindow(hBulkedit, SW_SHOWNORMAL);
 	UpdateWindow(hBulkedit);
 	EnableWindow(hMain, FALSE);
+	free(objects);
 }
 
 /* purely so all text gets selected on ctrl+a */
@@ -102,7 +191,7 @@ void CreateMainWindow(HWND hwnd)
 		ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_WANTRETURN,
 		SIDEBARSIZEEX, 8, 100, 100, hwnd, (HMENU) IDC_TEXT, modulehandle, NULL);
 	SendMessage(hEdit, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
-	actualEditWndProc = (WNDPROC) SetWindowLong(hEdit, GWL_WNDPROC, (LONG) &EditWndProc);
+	actualEditWndProc = (WNDPROC) SetWindowLongPtr(hEdit, GWL_WNDPROC, (LONG_PTR) &EditWndProc);
 	/* send a msg that paste from clipboard button was clicked */
 	PostMessageA(hwnd, WM_COMMAND, MAKEWPARAM(IDC_PAST, 0), 0);
 }
@@ -140,6 +229,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	case WM_COMMAND:
 		switch (LOWORD(wParam)) {
 		case IDC_CHAI:
+		case IDC_CHAX:
+		case IDC_CHAY:
+		case IDC_CHAZ:
 			showBulkEdit();
 			break;
 		case IDC_TEXT:
@@ -215,6 +307,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 	hInstance4windows = hInstance;
 
+
 	ncm.cbSize = sizeof(ncm);
 	SystemParametersInfo(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
 	hfDefault = CreateFontIndirect(&(ncm.lfMessageFont));
@@ -234,7 +327,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	wc.hIconSm = LoadIcon(NULL, IDI_APPLICATION); /*small icon (taskbar)*/
 
 	if (!RegisterClassEx(&wc)) {
-		MessageBox(NULL, "failed window reg", "err", MB_ICONEXCLAMATION | MB_OK);
+		ERRMSG(NULL, "Window reg failed.");
 		return 0;
 	}
 
@@ -248,7 +341,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		NULL, NULL, hInstance, NULL
 	);
 	if (hMain == NULL) {
-		MessageBox(NULL, "failed window creation", "err", MB_ICONEXCLAMATION | MB_OK);
+		ERRMSG(NULL, "Window creation failed.");
 		return 0;
 	}
 
