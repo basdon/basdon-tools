@@ -3,12 +3,14 @@
 #include <windows.h>
 #include <stdio.h>
 #include <math.h>
+#include <float.h>
 
 #define ERRMSG(parent,text) MessageBoxA(parent,text,"oops",MB_ICONWARNING|MB_OK)
 #define spr(...) sprintf_s(message,sizeof(message),__VA_ARGS__)
 
 #define PAD (8)
 #define PAD2 (PAD+PAD)
+#define BTNHEIGHT (25)
 #define SIDEBARSIZE (150)
 #define SIDEBARSIZEEX (SIDEBARSIZE + PAD2)
 #define BULKWINWIDTH 400
@@ -20,41 +22,54 @@
 #define IDC_COPY 102
 #define IDC_PAST 103
 #define IDC_LABL 104
+/* id, x, y, z must be consecutive numbers (in the same order as struct OBJECT values */
 #define IDC_CHAI 105
 #define IDC_CHAX 106
 #define IDC_CHAY 107
 #define IDC_CHAZ 108
+#define IDC_BULK_LABL 201
+#define IDC_BULK_IMMV 202
+#define IDC_BULK_MINV 203
+#define IDC_BULK_MAXV 204
+#define IDC_BULK_AVGV 205
+#define IDC_BULK_DIST 206
+#define IDC_BULK_IMMB 207
 
 struct OBJECT
 {
-	int id;
-	float x, y, z;
-	float rx, ry, rz;
+	float values[7];
+};
+
+struct BULKVALUES
+{
+	float actual, min, max, avg;
 };
 
 char message[200];
 
 int window_being_created;
+int bulk_edit_value_idx;
+int numobjects;
 HINSTANCE hInstance4windows;
 HFONT hfDefault;
 HMODULE modulehandle;
 WNDCLASSEX wc;
-HWND hMain, hBulkedit = NULL, hEdit, hLabel;
+HWND hMain, hBulkedit = NULL, hEdit, hLabel, hBulkimmvalue;
 WNDPROC actualEditWndProc;
+struct BULKVALUES bulkvalues;
 
-void showBulkEdit()
+void doBulkEdit()
 {
 	MSG msg;
 	RECT mainpos;
 	int selstart, selend, linestart, lineend;
-	int numobjects, i;
+	int i;
 	int linelen;
 	char *linecontent;
 	int parseidx;
 	char parsingvalue[100], *c, *p;
-	float values[7], x;
 	int valueidx, invalue;
-	const int numvalues = sizeof(values)/sizeof(values[0]);
+	const int numvalues = sizeof(((struct OBJECT*) 0)->values)/sizeof(((struct OBJECT*) 0)->values[0]);
 	struct OBJECT *objects, *o;
 
 	SendMessage(hEdit, EM_GETSEL, (WPARAM) &selstart, (LPARAM) &selend);
@@ -105,7 +120,7 @@ void showBulkEdit()
 				if (invalue) {
 					invalue = 0;
 					*p = 0;
-					values[++valueidx] = (float) atof(parsingvalue);
+					o->values[++valueidx] = (float) atof(parsingvalue);
 					if (valueidx >= numvalues) {
 						break;
 					}
@@ -115,30 +130,37 @@ void showBulkEdit()
 		}
 		free(linecontent);
 		if (valueidx != numvalues - 1) {
-			spr("invalid line, expected %d values but got %d", numvalues, valueidx);
+			spr("invalid line, expected %d values but got %d"
+				" (don't select empty lines)", numvalues, valueidx);
+			ERRMSG(hMain, message);
 			free(objects);
 			return;
 		}
-		o->id = (int) values[0];
-		o->x = values[1];
-		o->y = values[2];
-		o->z = values[3];
-		o->rx = values[4];
-		o->ry = values[5];
-		o->rz = values[6];
 		o++;
 	}
 
-	GetWindowRect(hMain, &mainpos);
+	bulkvalues.max = -FLT_MAX;
+	bulkvalues.min = FLT_MAX;
+	bulkvalues.avg = 0.0f;
+	o = objects + numobjects;
+	while (o-- != objects) {
+		if (o->values[bulk_edit_value_idx] < bulkvalues.min) {
+			bulkvalues.min = o->values[bulk_edit_value_idx];
+		}
+		if (o->values[bulk_edit_value_idx] > bulkvalues.max) {
+			bulkvalues.max = o->values[bulk_edit_value_idx];
+		}
+		bulkvalues.avg += o->values[bulk_edit_value_idx];
+	}
+	bulkvalues.avg /= numobjects;
+
 	window_being_created = WIN_BULK;
 	hBulkedit = CreateWindowEx(
 		0,
 		wc.lpszClassName,
 		"Bulk edit",
-		WS_OVERLAPPEDWINDOW & ~(WS_MAXIMIZEBOX | WS_MINIMIZEBOX),
-		(mainpos.left + mainpos.right - BULKWINWIDTH) / 2,
-		(mainpos.top + mainpos.bottom - BULKWINWIDTH) / 2,
-		BULKWINWIDTH, BULKWINWIDTH,
+		WS_OVERLAPPEDWINDOW & ~(WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_SIZEBOX),
+		0, 0, BULKWINWIDTH, BULKWINWIDTH, /*x y pos will get adjusted in WM_CREATE*/
 		hMain, NULL, hInstance4windows, NULL
 	);
 	if (hBulkedit == NULL) {
@@ -166,7 +188,8 @@ void showBulkEdit()
 		while (o-- != objects) {
 			parseidx += sprintf_s(c + parseidx, 100,
 				"CreateObject(%d, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f);\r\n",
-				o->id, o->x, o->y, o->z, o->rx, o->ry, o->rz);
+				(int) o->values[0], o->values[1], o->values[2], o->values[3],
+				o->values[4], o->values[5], o->values[6]);
 		}
 		SetFocus(hEdit);
 		SendMessage(hEdit, EM_SETSEL, selstart, selend + 2);
@@ -190,6 +213,54 @@ LRESULT CALLBACK EditWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 void CreateBulkWindow(HWND hwnd)
 {
+	HWND control;
+	int y = PAD, h;
+	char buf[150];
+	RECT rect, mainpos;
+	int controlwidth, halfwidth;
+
+	GetClientRect(hwnd, &rect);
+	controlwidth = rect.right - rect.left - PAD2;
+	halfwidth = (controlwidth - PAD) / 2;
+
+	sprintf_s(buf, sizeof(buf), "Editing %d objects", numobjects);
+	control = CreateWindowExA(0, "Static", buf, WS_CHILD | WS_VISIBLE | SS_LEFT,
+		PAD, y, controlwidth, h = 18, hwnd, (HMENU) IDC_BULK_LABL, modulehandle, NULL);
+	SendMessage(control, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
+	sprintf_s(buf, sizeof(buf), "%.4f", bulkvalues.min);
+	hBulkimmvalue = CreateWindowExA(
+		WS_EX_CLIENTEDGE, "Edit", buf,
+		WS_CHILD | WS_VISIBLE,
+		PAD, y += h + PAD, halfwidth, h = 18,
+		hwnd, (HMENU) IDC_BULK_IMMV, modulehandle, NULL);
+	SendMessage(hBulkimmvalue, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
+	control = CreateWindowExA(0, "Button", "Set", WS_CHILD | WS_VISIBLE, PAD2 + halfwidth, y,
+		halfwidth, h = 18, hwnd, (HMENU) IDC_BULK_IMMB, modulehandle, NULL);
+	SendMessage(control, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
+	sprintf_s(buf, sizeof(buf), "Use min %.2f", bulkvalues.min);
+	control = CreateWindowExA(0, "Button", buf, WS_CHILD | WS_VISIBLE, PAD, y += h + PAD,
+		controlwidth, h = BTNHEIGHT, hwnd, (HMENU) IDC_BULK_MINV, modulehandle, NULL);
+	SendMessage(control, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
+	sprintf_s(buf, sizeof(buf), "Use max %.2f", bulkvalues.max);
+	control = CreateWindowExA(0, "Button", buf, WS_CHILD | WS_VISIBLE, PAD, y += h + PAD,
+		controlwidth, h = BTNHEIGHT, hwnd, (HMENU) IDC_BULK_MINV, modulehandle, NULL);
+	SendMessage(control, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
+	sprintf_s(buf, sizeof(buf), "Use avg %.2f", bulkvalues.avg);
+	control = CreateWindowExA(0, "Button", buf, WS_CHILD | WS_VISIBLE, PAD, y += h + PAD,
+		controlwidth, h = BTNHEIGHT, hwnd, (HMENU) IDC_BULK_MINV, modulehandle, NULL);
+	SendMessage(control, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
+	sprintf_s(buf, sizeof(buf), "Distribute between min && max");
+	control = CreateWindowExA(0, "Button", buf, WS_CHILD | WS_VISIBLE, PAD, y += h + PAD,
+		controlwidth, h = BTNHEIGHT, hwnd, (HMENU) IDC_BULK_MINV, modulehandle, NULL);
+	SendMessage(control, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
+
+	GetWindowRect(hMain, &mainpos);
+	rect.bottom = rect.top + y + h + PAD;
+	AdjustWindowRect(&rect, WS_OVERLAPPEDWINDOW & ~WS_OVERLAPPED, FALSE);
+	SetWindowPos(hwnd, NULL,
+		(mainpos.left + mainpos.right - (rect.right - rect.left)) / 2,
+		(mainpos.top + mainpos.bottom - (rect.bottom - rect.top)) / 2,
+		rect.right - rect.left, rect.bottom - rect.top, 0);
 }
 
 void CreateMainWindow(HWND hwnd)
@@ -201,28 +272,28 @@ void CreateMainWindow(HWND hwnd)
 		PAD, y, SIDEBARSIZE, h = 18, hwnd, (HMENU) IDC_LABL, modulehandle, NULL);
 	SendMessage(hLabel, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
 	control = CreateWindowExA(0, "Button", "Paste from clipboard", WS_CHILD | WS_VISIBLE,
-		PAD, y += h + PAD, SIDEBARSIZE, h = 25, hwnd, (HMENU) IDC_PAST, modulehandle, NULL);
+		PAD, y += h + PAD, SIDEBARSIZE, h = BTNHEIGHT, hwnd, (HMENU) IDC_PAST, modulehandle, NULL);
 	SendMessage(control, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
 	control = CreateWindowExA(0, "Button", "Copy to clipboard", WS_CHILD | WS_VISIBLE,
-		PAD, y += h + PAD, SIDEBARSIZE, h = 25, hwnd, (HMENU) IDC_COPY, modulehandle, NULL);
+		PAD, y += h + PAD, SIDEBARSIZE, h = BTNHEIGHT, hwnd, (HMENU) IDC_COPY, modulehandle, NULL);
 	SendMessage(control, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
 	control = CreateWindowExA(0, "Button", "Bulk change ID", WS_CHILD | WS_VISIBLE,
-		PAD, y += h + PAD, SIDEBARSIZE, h = 25, hwnd, (HMENU) IDC_CHAI, modulehandle, NULL);
+		PAD, y += h + PAD, SIDEBARSIZE, h = BTNHEIGHT, hwnd, (HMENU) IDC_CHAI, modulehandle, NULL);
 	SendMessage(control, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
 	control = CreateWindowExA(0, "Button", "Bulk change X", WS_CHILD | WS_VISIBLE,
-		PAD, y += h + PAD, SIDEBARSIZE, h = 25, hwnd, (HMENU) IDC_CHAX, modulehandle, NULL);
+		PAD, y += h + PAD, SIDEBARSIZE, h = BTNHEIGHT, hwnd, (HMENU) IDC_CHAX, modulehandle, NULL);
 	SendMessage(control, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
 	control = CreateWindowExA(0, "Button", "Bulk change Y", WS_CHILD | WS_VISIBLE,
-		PAD, y += h + PAD, SIDEBARSIZE, h = 25, hwnd, (HMENU) IDC_CHAY, modulehandle, NULL);
+		PAD, y += h + PAD, SIDEBARSIZE, h = BTNHEIGHT, hwnd, (HMENU) IDC_CHAY, modulehandle, NULL);
 	SendMessage(control, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
 	control = CreateWindowExA(0, "Button", "Bulk change Z", WS_CHILD | WS_VISIBLE,
-		PAD, y += h + PAD, SIDEBARSIZE, h = 25, hwnd, (HMENU) IDC_CHAZ, modulehandle, NULL);
+		PAD, y += h + PAD, SIDEBARSIZE, h = BTNHEIGHT, hwnd, (HMENU) IDC_CHAZ, modulehandle, NULL);
 	SendMessage(control, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
 	hEdit = CreateWindowExA(
 		WS_EX_CLIENTEDGE, "Edit", "",
 		WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_HSCROLL | ES_MULTILINE |
 		ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_WANTRETURN,
-		SIDEBARSIZEEX, 8, 100, 100, hwnd, (HMENU) IDC_TEXT, modulehandle, NULL);
+		SIDEBARSIZEEX, PAD, 100, 100, hwnd, (HMENU) IDC_TEXT, modulehandle, NULL);
 	SendMessage(hEdit, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
 	actualEditWndProc = (WNDPROC) SetWindowLongPtr(hEdit, GWL_WNDPROC, (LONG_PTR) &EditWndProc);
 	/* send a msg that paste from clipboard button was clicked */
@@ -265,7 +336,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		case IDC_CHAX:
 		case IDC_CHAY:
 		case IDC_CHAZ:
-			showBulkEdit();
+			bulk_edit_value_idx = LOWORD(wParam) - IDC_CHAI;
+			doBulkEdit();
 			break;
 		case IDC_TEXT:
 		{
