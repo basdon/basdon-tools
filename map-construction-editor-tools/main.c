@@ -57,6 +57,7 @@ WNDCLASSEX wc;
 HWND hMain, hBulkedit = NULL, hEdit, hLabel, hBulkimmvalue;
 WNDPROC actualEditWndProc;
 struct BULKVALUES bulkvalues;
+struct OBJECT *objects;
 
 void doBulkEdit()
 {
@@ -70,7 +71,7 @@ void doBulkEdit()
 	char parsingvalue[100], *c, *p;
 	int valueidx, invalue;
 	const int numvalues = sizeof(((struct OBJECT*) 0)->values)/sizeof(((struct OBJECT*) 0)->values[0]);
-	struct OBJECT *objects, *o;
+	struct OBJECT *o;
 
 	SendMessage(hEdit, EM_GETSEL, (WPARAM) &selstart, (LPARAM) &selend);
 	if (selstart <= 0 && selend <= 0) {
@@ -194,6 +195,16 @@ void doBulkEdit()
 		SetFocus(hEdit);
 		SendMessage(hEdit, EM_SETSEL, selstart, selend + 2);
 		SendMessage(hEdit, EM_REPLACESEL, FALSE, (LPARAM) c);
+		/*re-select lines*/
+		i = numobjects;
+		while (i-- > 0) {
+			selstart = SendMessage(hEdit, EM_LINEINDEX, linestart + i, 0);
+			linelen = SendMessage(hEdit, EM_LINELENGTH, (WPARAM) selstart, 0);
+			if (i + 1 == numobjects) {
+				selend = selstart + linelen;
+			}
+		}
+		SendMessage(hEdit, EM_SETSEL, selstart, selend + 1);
 	} else {
 		ERRMSG(hMain, "Memory allocation failed");
 	}
