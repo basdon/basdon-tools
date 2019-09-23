@@ -28,12 +28,13 @@
 #define IDC_CHAY 107
 #define IDC_CHAZ 108
 #define IDC_BULK_LABL 201
+/* imm, min, max, avg must be consecutive numbers (see doBulkEdit) */
 #define IDC_BULK_IMMV 202
 #define IDC_BULK_MINV 203
 #define IDC_BULK_MAXV 204
 #define IDC_BULK_AVGV 205
 #define IDC_BULK_DIST 206
-#define IDC_BULK_IMMB 207
+#define IDC_BULK_IMMT 207
 
 struct OBJECT
 {
@@ -43,6 +44,7 @@ struct OBJECT
 struct BULKVALUES
 {
 	float actual, min, max, avg;
+	float *values[4];
 };
 
 char message[200];
@@ -154,6 +156,10 @@ void doBulkEdit()
 		bulkvalues.avg += o->values[bulk_edit_value_idx];
 	}
 	bulkvalues.avg /= numobjects;
+	bulkvalues.values[0] = &bulkvalues.actual;
+	bulkvalues.values[1] = &bulkvalues.min;
+	bulkvalues.values[2] = &bulkvalues.max;
+	bulkvalues.values[3] = &bulkvalues.avg;
 
 	window_being_created = WIN_BULK;
 	hBulkedit = CreateWindowEx(
@@ -243,26 +249,26 @@ void CreateBulkWindow(HWND hwnd)
 		WS_EX_CLIENTEDGE, "Edit", buf,
 		WS_CHILD | WS_VISIBLE,
 		PAD, y += h + PAD, halfwidth, h = 18,
-		hwnd, (HMENU) IDC_BULK_IMMV, modulehandle, NULL);
+		hwnd, (HMENU) IDC_BULK_IMMT, modulehandle, NULL);
 	SendMessage(hBulkimmvalue, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
 	control = CreateWindowExA(0, "Button", "Set", WS_CHILD | WS_VISIBLE, PAD2 + halfwidth, y,
-		halfwidth, h = 18, hwnd, (HMENU) IDC_BULK_IMMB, modulehandle, NULL);
+		halfwidth, h = 18, hwnd, (HMENU) IDC_BULK_IMMV, modulehandle, NULL);
 	SendMessage(control, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
-	sprintf_s(buf, sizeof(buf), "Use min %.2f", bulkvalues.min);
+	sprintf_s(buf, sizeof(buf), "Use min %.4f", bulkvalues.min);
 	control = CreateWindowExA(0, "Button", buf, WS_CHILD | WS_VISIBLE, PAD, y += h + PAD,
 		controlwidth, h = BTNHEIGHT, hwnd, (HMENU) IDC_BULK_MINV, modulehandle, NULL);
 	SendMessage(control, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
-	sprintf_s(buf, sizeof(buf), "Use max %.2f", bulkvalues.max);
+	sprintf_s(buf, sizeof(buf), "Use max %.4f", bulkvalues.max);
 	control = CreateWindowExA(0, "Button", buf, WS_CHILD | WS_VISIBLE, PAD, y += h + PAD,
-		controlwidth, h = BTNHEIGHT, hwnd, (HMENU) IDC_BULK_MINV, modulehandle, NULL);
+		controlwidth, h = BTNHEIGHT, hwnd, (HMENU) IDC_BULK_MAXV, modulehandle, NULL);
 	SendMessage(control, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
-	sprintf_s(buf, sizeof(buf), "Use avg %.2f", bulkvalues.avg);
+	sprintf_s(buf, sizeof(buf), "Use avg %.4f", bulkvalues.avg);
 	control = CreateWindowExA(0, "Button", buf, WS_CHILD | WS_VISIBLE, PAD, y += h + PAD,
-		controlwidth, h = BTNHEIGHT, hwnd, (HMENU) IDC_BULK_MINV, modulehandle, NULL);
+		controlwidth, h = BTNHEIGHT, hwnd, (HMENU) IDC_BULK_AVGV, modulehandle, NULL);
 	SendMessage(control, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
 	sprintf_s(buf, sizeof(buf), "Distribute between min && max");
 	control = CreateWindowExA(0, "Button", buf, WS_CHILD | WS_VISIBLE, PAD, y += h + PAD,
-		controlwidth, h = BTNHEIGHT, hwnd, (HMENU) IDC_BULK_MINV, modulehandle, NULL);
+		controlwidth, h = BTNHEIGHT, hwnd, (HMENU) IDC_BULK_DIST, modulehandle, NULL);
 	SendMessage(control, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
 
 	GetWindowRect(hMain, &mainpos);
@@ -343,6 +349,42 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	}
 	case WM_COMMAND:
 		switch (LOWORD(wParam)) {
+		case IDC_BULK_IMMV:
+		{
+			char buf[50];
+			GetWindowText(hBulkimmvalue, buf, sizeof(buf));
+			bulkvalues.actual = atof(buf);
+		}
+		case IDC_BULK_MINV:
+		case IDC_BULK_MAXV:
+		case IDC_BULK_AVGV:
+		{
+			struct OBJECT *o = objects + numobjects;
+			while (o-- != objects) {
+				o->values[bulk_edit_value_idx] =
+					*bulkvalues.values[LOWORD(wParam) - IDC_BULK_IMMV];
+			}
+			PostMessage(hBulkedit, WM_CLOSE, 0, 0);
+			break;
+		}
+		case IDC_BULK_DIST:
+		{
+			struct OBJECT *o = objects + numobjects;
+			float increment;
+
+			if (numobjects == 1) {
+				ERRMSG(hBulkedit, "Cannot distribute for only one object");
+				return;
+			}
+
+			increment = (bulkvalues.max - bulkvalues.min) / (numobjects - 1);
+			while (o-- != objects) {
+				o->values[bulk_edit_value_idx] =
+					bulkvalues.min + increment * (o - objects);
+			}
+			PostMessage(hBulkedit, WM_CLOSE, 0, 0);
+			break;
+		}
 		case IDC_CHAI:
 		case IDC_CHAX:
 		case IDC_CHAY:
