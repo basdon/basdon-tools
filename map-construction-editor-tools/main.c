@@ -201,7 +201,7 @@ void doBulkEdit()
 		SetFocus(hEdit);
 		SendMessage(hEdit, EM_SETSEL, selstart, selend + 2);
 		SendMessage(hEdit, EM_REPLACESEL, FALSE, (LPARAM) c);
-		/*re-select lines*/
+		/*re-select lines, end -1 to not select the last \r\n (not -2 because idx excluded)*/
 		SendMessage(hEdit, EM_SETSEL, selstart, selstart + parseidx - 1);
 	} else {
 		ERRMSG(hMain, "Memory allocation failed");
