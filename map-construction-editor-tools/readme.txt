@@ -1,5 +1,5 @@
 Small tool to modify objects while working with
-SA-MP: Map Construction/SAMP-MC/samp-map-editor/editor.exe/JernejL's map editor
+SA-MP: Map Construction/SAMP-MC/samp-map-editor/editor.exe/JernejL's map editor/REAL editor
 or anything that generates CreateObject calls.
 
 features
