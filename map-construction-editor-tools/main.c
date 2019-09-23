@@ -246,22 +246,18 @@ void CreateBulkWindow(HWND hwnd)
 	control = CreateWindowExA(0, "Button", "Set", WS_CHILD | WS_VISIBLE, PAD2 + halfwidth, y,
 		halfwidth, h = 18, hwnd, (HMENU) IDC_BULK_IMMV, modulehandle, NULL);
 	SendMessage(control, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
+#define BTN(ID) control = CreateWindowExA(0, "Button", buf, WS_CHILD | WS_VISIBLE, PAD, y += h + PAD,\
+		controlwidth, h = BTNHEIGHT, hwnd, (HMENU) ID, modulehandle, NULL);\
+		SendMessage(control, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0))
 	sprintf_s(buf, sizeof(buf), "Use min %.4f", bulkvalues.min);
-	control = CreateWindowExA(0, "Button", buf, WS_CHILD | WS_VISIBLE, PAD, y += h + PAD,
-		controlwidth, h = BTNHEIGHT, hwnd, (HMENU) IDC_BULK_MINV, modulehandle, NULL);
-	SendMessage(control, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
+	BTN(IDC_BULK_MINV);
 	sprintf_s(buf, sizeof(buf), "Use max %.4f", bulkvalues.max);
-	control = CreateWindowExA(0, "Button", buf, WS_CHILD | WS_VISIBLE, PAD, y += h + PAD,
-		controlwidth, h = BTNHEIGHT, hwnd, (HMENU) IDC_BULK_MAXV, modulehandle, NULL);
-	SendMessage(control, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
+	BTN(IDC_BULK_MAXV);
 	sprintf_s(buf, sizeof(buf), "Use avg %.4f", bulkvalues.avg);
-	control = CreateWindowExA(0, "Button", buf, WS_CHILD | WS_VISIBLE, PAD, y += h + PAD,
-		controlwidth, h = BTNHEIGHT, hwnd, (HMENU) IDC_BULK_AVGV, modulehandle, NULL);
-	SendMessage(control, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
+	BTN(IDC_BULK_AVGV);
 	sprintf_s(buf, sizeof(buf), "Distribute between min && max");
-	control = CreateWindowExA(0, "Button", buf, WS_CHILD | WS_VISIBLE, PAD, y += h + PAD,
-		controlwidth, h = BTNHEIGHT, hwnd, (HMENU) IDC_BULK_DIST, modulehandle, NULL);
-	SendMessage(control, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
+	BTN(IDC_BULK_DIST);
+#undef BTN
 
 	GetWindowRect(hMain, &mainpos);
 	rect.bottom = rect.top + y + h + PAD;
@@ -280,24 +276,16 @@ void CreateMainWindow(HWND hwnd)
 	hLabel = CreateWindowExA(0, "Static", "-", WS_CHILD | WS_VISIBLE | SS_LEFT,
 		PAD, y, SIDEBARSIZE, h = 18, hwnd, (HMENU) IDC_LABL, modulehandle, NULL);
 	SendMessage(hLabel, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
-	control = CreateWindowExA(0, "Button", "Paste from clipboard", WS_CHILD | WS_VISIBLE,
-		PAD, y += h + PAD, SIDEBARSIZE, h = BTNHEIGHT, hwnd, (HMENU) IDC_PAST, modulehandle, NULL);
-	SendMessage(control, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
-	control = CreateWindowExA(0, "Button", "Copy to clipboard", WS_CHILD | WS_VISIBLE,
-		PAD, y += h + PAD, SIDEBARSIZE, h = BTNHEIGHT, hwnd, (HMENU) IDC_COPY, modulehandle, NULL);
-	SendMessage(control, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
-	control = CreateWindowExA(0, "Button", "Bulk change ID", WS_CHILD | WS_VISIBLE,
-		PAD, y += h + PAD, SIDEBARSIZE, h = BTNHEIGHT, hwnd, (HMENU) IDC_CHAI, modulehandle, NULL);
-	SendMessage(control, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
-	control = CreateWindowExA(0, "Button", "Bulk change X", WS_CHILD | WS_VISIBLE,
-		PAD, y += h + PAD, SIDEBARSIZE, h = BTNHEIGHT, hwnd, (HMENU) IDC_CHAX, modulehandle, NULL);
-	SendMessage(control, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
-	control = CreateWindowExA(0, "Button", "Bulk change Y", WS_CHILD | WS_VISIBLE,
-		PAD, y += h + PAD, SIDEBARSIZE, h = BTNHEIGHT, hwnd, (HMENU) IDC_CHAY, modulehandle, NULL);
-	SendMessage(control, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
-	control = CreateWindowExA(0, "Button", "Bulk change Z", WS_CHILD | WS_VISIBLE,
-		PAD, y += h + PAD, SIDEBARSIZE, h = BTNHEIGHT, hwnd, (HMENU) IDC_CHAZ, modulehandle, NULL);
-	SendMessage(control, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
+#define BTN(TEXT,ID) control = CreateWindowExA(0, "Button", TEXT, WS_CHILD | WS_VISIBLE, PAD,\
+		y += h + PAD, SIDEBARSIZE, h = BTNHEIGHT, hwnd, (HMENU) ID, modulehandle, NULL);\
+		SendMessage(control, WM_SETFONT, (WPARAM) hfDefault, MAKELPARAM(FALSE, 0));
+	BTN("Paste from clipboard", IDC_PAST);
+	BTN("Copy to clipboard", IDC_COPY);
+	BTN("Bulk change ID", IDC_CHAI);
+	BTN("Bulk change X", IDC_CHAX);
+	BTN("Bulk change Y", IDC_CHAY);
+	BTN("Bulk change Z", IDC_CHAZ);
+#undef BTN
 	hEdit = CreateWindowExA(
 		WS_EX_CLIENTEDGE, "Edit", "",
 		WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_HSCROLL | ES_MULTILINE |
