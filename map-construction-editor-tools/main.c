@@ -374,7 +374,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 			if (numobjects == 1) {
 				ERRMSG(hBulkedit, "Cannot distribute for only one object");
-				return;
+				break;
 			}
 
 			increment = (bulkvalues.max - bulkvalues.min) / (numobjects - 1);
