@@ -202,15 +202,7 @@ void doBulkEdit()
 		SendMessage(hEdit, EM_SETSEL, selstart, selend + 2);
 		SendMessage(hEdit, EM_REPLACESEL, FALSE, (LPARAM) c);
 		/*re-select lines*/
-		i = numobjects;
-		while (i-- > 0) {
-			selstart = SendMessage(hEdit, EM_LINEINDEX, linestart + i, 0);
-			linelen = SendMessage(hEdit, EM_LINELENGTH, (WPARAM) selstart, 0);
-			if (i + 1 == numobjects) {
-				selend = selstart + linelen;
-			}
-		}
-		SendMessage(hEdit, EM_SETSEL, selstart, selend + 1);
+		SendMessage(hEdit, EM_SETSEL, selstart, selstart + parseidx - 1);
 	} else {
 		ERRMSG(hMain, "Memory allocation failed");
 	}
