@@ -12,7 +12,7 @@ int main(int argc, char *argv[])
 #pragma pack(push,1)
 		struct {
 			int model;
-			float x, y, z, rx, ry, rz;
+			float x, y, z, rx, ry, rz, drawdistance;
 		} obj;
 #pragma pack(pop)
 	} mem;
@@ -43,7 +43,12 @@ int main(int argc, char *argv[])
 			&mem.obj.ry,
 			&mem.obj.rz))
 		{
-			fwrite(mem.buf, 4, 7, ofile);
+			mem.obj.drawdistance = 0.0f;
+			if (19121 <= mem.obj.model && mem.obj.model <= 19127) {
+				/*more drawdistance for bollardlights*/
+				mem.obj.drawdistance = 500.0f;
+			}
+			fwrite(mem.buf, 4, 8, ofile);
 		} else {
 			printf("invalid input on line %d", linenum);
 		}
