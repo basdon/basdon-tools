@@ -33,7 +33,6 @@ int main(int argc, char *argv[])
 
 	while (fgets(line, sizeof(line), stdin) != 0) {
 		linenum++;
-/*----------------------------------------------------------------------------*/
 		if (7 == sscanf(line,
 			"CreateObject(%d,%f,%f,%f,%f,%f,%f);\n",
 			&mem.obj.model,
@@ -54,3 +53,4 @@ int main(int argc, char *argv[])
 
 	return 0;
 }
+/*----------------------------------------------------------------------------*/
