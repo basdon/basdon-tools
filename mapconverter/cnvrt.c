@@ -24,7 +24,7 @@ int main(int argc, char *argv[])
 
 	ofile = fopen(argv[1], "wb");
 	if (ofile == NULL) {
-		printf("could not open output file %s", argv[1]);
+		printf("could not open output file %s\n", argv[1]);
 		return 1;
 	}
 
@@ -50,7 +50,7 @@ int main(int argc, char *argv[])
 			}
 			fwrite(mem.buf, 4, 8, ofile);
 		} else {
-			printf("invalid input on line %d", linenum);
+			printf("invalid input on line %d\n", linenum);
 		}
 	}
 
