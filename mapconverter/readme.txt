@@ -2,7 +2,7 @@ Small tool to convert some input formats to .map format used by basdon-fly.
 
 Compiling
 ---------
-gcc -Wall -s -x c -ansi -std=c89 -o cnvrt cnvrt.c
+gcc -Wall -s -x c -std=c89 -m32 -o cnvrt cnvrt.c
 
 Usage
 -----
