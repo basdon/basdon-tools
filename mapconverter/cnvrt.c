@@ -4,7 +4,7 @@
 int main(int argc, char *argv[])
 {
 	FILE *ofile;
-	char line[512];
+	char line[512], *linep, *lineq;
 	int linenum = 0;
 	union {
 		char buf[32];
@@ -33,6 +33,15 @@ int main(int argc, char *argv[])
 
 	while (fgets(line, sizeof(line), stdin) != 0) {
 		linenum++;
+		/* remove spaces*/
+		linep = lineq = line;
+		do {
+			if (*linep != ' ') {
+				*lineq = *linep;
+				lineq++;
+			}
+			linep++;
+		} while (*lineq);
 		if (7 == sscanf(line,
 			"CreateObject(%d,%f,%f,%f,%f,%f,%f);\n",
 			&mem.obj.model,
@@ -50,7 +59,7 @@ int main(int argc, char *argv[])
 			}
 			fwrite(mem.buf, 4, 8, ofile);
 		} else {
-			printf("invalid input on line %d\n", linenum);
+			printf("invalid input on line %d: %s\n", linenum, line);
 		}
 	}
 
