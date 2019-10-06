@@ -8,6 +8,8 @@ Usage
 -----
 cat inputfile.pwn | ./cnvrt output.map
 
+exitcode is non-zero when something failed
+
 Input formats
 -------------
 - *.pwn
