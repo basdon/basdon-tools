@@ -4,18 +4,33 @@
 int main(int argc, char *argv[])
 {
 	FILE *ofile;
-	char line[512];
+	char line[512], *linep, *lineq;
 	int linenum = 0;
+	int result = 0;
+#pragma pack(push,1)
+	union {
+		char buf[12];
+		struct {
+			int version;
+			int numremoveobj;
+			int numobj;
+		} header;
+	} mem0;
 	union {
 		char buf[32];
-		int version;
-#pragma pack(push,1)
 		struct {
 			int model;
 			float x, y, z, rx, ry, rz, drawdistance;
 		} obj;
-#pragma pack(pop)
 	} mem;
+	union {
+		char buf[20];
+		struct {
+			int model;
+			float x, y, z, radius;
+		} obj;
+	} memremove;
+#pragma pack(pop)
 
 	if (argc != 2) {
 		puts("need one arg for outputfile");
@@ -28,11 +43,26 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
-	mem.version = 1;
-	fwrite(mem.buf, 4, 1, ofile);
+	mem0.header.version = 1;
+	mem0.header.numremoveobj = -1;
+	mem0.header.numobj = -1;
+	fwrite(mem0.buf, sizeof(mem0.buf), 1, ofile);
+	mem0.header.numremoveobj = 0;
+	mem0.header.numobj = 0;
 
 	while (fgets(line, sizeof(line), stdin) != 0) {
 		linenum++;
+		/* remove spaces*/
+		linep = lineq = line;
+		while (1) {
+			if (*linep != ' ') {
+				if (!(*lineq = *linep)) {
+					break;
+				}
+				lineq++;
+			}
+			linep++;
+		}
 		if (7 == sscanf(line,
 			"CreateObject(%d,%f,%f,%f,%f,%f,%f);\n",
 			&mem.obj.model,
@@ -49,13 +79,30 @@ int main(int argc, char *argv[])
 				mem.obj.drawdistance = 500.0f;
 			}
 			fwrite(mem.buf, 4, 8, ofile);
+			mem0.header.numobj++;
+		} else if (5 == sscanf(line,
+			"RemoveBuildingForPlayer(playerid,%d,%f,%f,%f,%f);\n",
+			&memremove.obj.model,
+			&memremove.obj.x,
+			&memremove.obj.y,
+			&memremove.obj.z,
+			&memremove.obj.radius))
+		{
+			memremove.obj.model = -memremove.obj.model;
+			fwrite(memremove.buf, 4, 5, ofile);
+			mem0.header.numremoveobj++;
 		} else {
-			printf("invalid input on line %d\n", linenum);
+			printf("invalid input on line %d: %s\n", linenum, line);
 		}
 	}
 
+	if (fseek(ofile, 0, SEEK_SET)) {
+		fputs("failed to rewrite header", stderr);
+		result = 1;
+	}
+	fwrite(mem0.buf, sizeof(mem0.buf), 1, ofile);
 	fclose(ofile);
 
-	return 0;
+	return result;
 }
 /*----------------------------------------------------------------------------*/
