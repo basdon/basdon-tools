@@ -6,16 +6,23 @@ int main(int argc, char *argv[])
 	FILE *ofile;
 	char line[512], *linep, *lineq;
 	int linenum = 0;
+#pragma pack(push,1)
 	union {
 		char buf[32];
 		int version;
-#pragma pack(push,1)
 		struct {
 			int model;
 			float x, y, z, rx, ry, rz, drawdistance;
 		} obj;
-#pragma pack(pop)
 	} mem;
+	union {
+		char buf[32];
+		struct {
+			int model;
+			float x, y, z, radius;
+		} obj;
+	} memremove;
+#pragma pack(pop)
 
 	if (argc != 2) {
 		puts("need one arg for outputfile");
@@ -35,13 +42,15 @@ int main(int argc, char *argv[])
 		linenum++;
 		/* remove spaces*/
 		linep = lineq = line;
-		do {
+		while (1) {
 			if (*linep != ' ') {
-				*lineq = *linep;
+				if (!(*lineq = *linep)) {
+					break;
+				}
 				lineq++;
 			}
 			linep++;
-		} while (*lineq);
+		}
 		if (7 == sscanf(line,
 			"CreateObject(%d,%f,%f,%f,%f,%f,%f);\n",
 			&mem.obj.model,
@@ -58,6 +67,16 @@ int main(int argc, char *argv[])
 				mem.obj.drawdistance = 500.0f;
 			}
 			fwrite(mem.buf, 4, 8, ofile);
+		} else if (5 == sscanf(line,
+			"RemoveBuildingForPlayer(playerid,%d,%f,%f,%f,%f);\n",
+			&memremove.obj.model,
+			&memremove.obj.x,
+			&memremove.obj.y,
+			&memremove.obj.z,
+			&memremove.obj.radius))
+		{
+			memremove.obj.model = -memremove.obj.model;
+			fwrite(memremove.buf, 4, 5, ofile);
 		} else {
 			printf("invalid input on line %d: %s\n", linenum, line);
 		}
