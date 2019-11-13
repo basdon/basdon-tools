@@ -8,7 +8,6 @@ found in amxtime.h, which is Copyright (c) ITB CompuPhase, 2001-2005
 
 #if ISWIN
 	#include <windows.h>
-	#include <mmsystem.h>
 	#include <stdio.h>
 #else
 	#include <sys/time.h>
@@ -76,7 +75,7 @@ void __stdcall ProcessTick()
 {
 	unsigned long t = gettimestamp();
 	if (t - lastsecond > 1000) {
-		printf("value %ld\n", );
+		printf("value %ld\n", t);
 		printf("second %d\n", seconds++);
 		lastsecond += 1000;
 	}
