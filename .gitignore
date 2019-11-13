@@ -10,3 +10,8 @@
 /mapconverter/*
 !/mapconverter/*.c
 !/mapconverter/*.txt
+/timertest/*
+!/timertest/*.c
+!/timertest/*.def
+!/timertest/*.vcproj
+!/timertest/Makefile
