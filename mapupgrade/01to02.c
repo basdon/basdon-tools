@@ -2,6 +2,7 @@
 
 int main(int argc, char **argv)
 {
+	int result;
 	FILE *in, *out;
 #pragma pack(push,1)
 	union {
@@ -46,6 +47,8 @@ int main(int argc, char **argv)
 		} removev2;
 	} data;
 #pragma pack(pop)
+
+	result = 0;
 
 	if (argc < 3) {
 		puts("need inputfile and outputfile");
@@ -102,6 +105,7 @@ int main(int argc, char **argv)
 
 	if (!fseek(in, sizeof(headerv1), SEEK_SET)) {
 		puts("failed to fseek");
+		result = 1;
 		goto ret;
 	}
 skipremoves:
@@ -122,8 +126,9 @@ skipremoves:
 ret:
 	fclose(in);
 	fclose(out);
-	return 0;
+	return result;
 corrupted:
 	puts("input file is corrupted");
+	result = 1;
 	goto ret;
 }

@@ -236,7 +236,7 @@ int main(int argc, char **argv)
 			printf("EOF while reading remove %i\n", i);
 			goto corrupted;
 		}
-		if (remove.model < 611 || 19999 < remove.model) {
+		if (remove.model != -1 && (remove.model < 611 || 19999 < remove.model)) {
 			printf("invalid remove model %d at index %d\n", remove.model, i);
 		}
 		modelremoves[remove.model]++;
