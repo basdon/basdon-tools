@@ -9,26 +9,30 @@ int main(int argc, char *argv[])
 	int result = 0;
 #pragma pack(push,1)
 	union {
-		char buf[12];
+		char buf[28];
 		struct {
 			int version;
 			int numremoveobj;
 			int numobj;
-		} header;
-	} mem0;
+			int numgang;
+			float streamin;
+			float streamout;
+			float drawdistance;
+		} data;
+	} memheader;
 	union {
-		char buf[32];
+		char buf[28];
 		struct {
 			int model;
-			float x, y, z, rx, ry, rz, drawdistance;
-		} obj;
-	} mem;
+			float x, y, z, rx, ry, rz;
+		} data;
+	} memobject;
 	union {
 		char buf[20];
 		struct {
 			int model;
 			float x, y, z, radius;
-		} obj;
+		} data;
 	} memremove;
 #pragma pack(pop)
 
@@ -43,12 +47,23 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
-	mem0.header.version = 1;
-	mem0.header.numremoveobj = -1;
-	mem0.header.numobj = -1;
-	fwrite(mem0.buf, sizeof(mem0.buf), 1, ofile);
-	mem0.header.numremoveobj = 0;
-	mem0.header.numobj = 0;
+
+	memheader.data.version = 0x0250414D;
+	if (memheader.buf[0] != 'M' || memheader.buf[3] != 2) {
+		puts("wrong endianness or structs are packed");
+		result = 2;
+		goto ret;
+	}
+	memheader.data.numremoveobj = -1;
+	memheader.data.numobj = -1;
+	memheader.data.numgang = -1;
+	memheader.data.streamin = 500.0f;
+	memheader.data.streamout = 600.0f;
+	memheader.data.drawdistance = 500.0f;
+	fwrite(memheader.buf, sizeof(memheader.buf), 1, ofile);
+	memheader.data.numremoveobj = 0;
+	memheader.data.numobj = 0;
+	memheader.data.numgang = 0;
 
 	while (fgets(line, sizeof(line), stdin) != 0) {
 		linenum++;
@@ -65,32 +80,26 @@ int main(int argc, char *argv[])
 		}
 		if (7 == sscanf(line,
 			"CreateObject(%d,%f,%f,%f,%f,%f,%f);\n",
-			&mem.obj.model,
-			&mem.obj.x,
-			&mem.obj.y,
-			&mem.obj.z,
-			&mem.obj.rx,
-			&mem.obj.ry,
-			&mem.obj.rz))
+			&memobject.data.model,
+			&memobject.data.x,
+			&memobject.data.y,
+			&memobject.data.z,
+			&memobject.data.rx,
+			&memobject.data.ry,
+			&memobject.data.rz))
 		{
-			mem.obj.drawdistance = 0.0f;
-			if (19121 <= mem.obj.model && mem.obj.model <= 19127) {
-				/*more drawdistance for bollardlights*/
-				mem.obj.drawdistance = 500.0f;
-			}
-			fwrite(mem.buf, 4, 8, ofile);
-			mem0.header.numobj++;
+			fwrite(memobject.buf, sizeof(memobject.buf), 1, ofile);
+			memheader.data.numobj++;
 		} else if (5 == sscanf(line,
 			"RemoveBuildingForPlayer(playerid,%d,%f,%f,%f,%f);\n",
-			&memremove.obj.model,
-			&memremove.obj.x,
-			&memremove.obj.y,
-			&memremove.obj.z,
-			&memremove.obj.radius))
+			&memremove.data.model,
+			&memremove.data.x,
+			&memremove.data.y,
+			&memremove.data.z,
+			&memremove.data.radius))
 		{
-			memremove.obj.model = -memremove.obj.model;
-			fwrite(memremove.buf, 4, 5, ofile);
-			mem0.header.numremoveobj++;
+			fwrite(memremove.buf, sizeof(memremove.buf), 1, ofile);
+			memheader.data.numremoveobj++;
 		} else {
 			printf("invalid input on line %d: %s\n", linenum, line);
 		}
@@ -100,9 +109,10 @@ int main(int argc, char *argv[])
 		fputs("failed to rewrite header", stderr);
 		result = 1;
 	}
-	fwrite(mem0.buf, sizeof(mem0.buf), 1, ofile);
-	fclose(ofile);
+	fwrite(memheader.buf, sizeof(memheader.buf), 1, ofile);
 
+ret:
+	fclose(ofile);
 	return result;
 }
 /*----------------------------------------------------------------------------*/

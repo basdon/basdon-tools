@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 #define MAX_MODELS 20000
 
@@ -79,7 +80,7 @@ int ide_load_file(char *filename)
 	int amount;
 
 	amount = 0;
-	if (f = fopen(filename, "r")) {
+	if ((f = fopen(filename, "r"))) {
 		inobj = 0;
 nextline:
 		if (!fgets(buf, sizeof(buf), f)) {
@@ -107,7 +108,7 @@ nextline:
 				goto nextline;
 			}
 			if (nameptr - names > sizeof(names) - 30) {
-				puts("ide name pool depleted\n");
+				puts("ide name pool depleted");
 				goto nextline;
 			}
 			pos = 0;
@@ -153,27 +154,37 @@ void ide_load(char *sadir)
 int main(int argc, char **argv)
 {
 	FILE *file;
-	int spec_version;
-	int num_objects;
-	int num_removes;
-	int read_objects;
-	int read_removes;
 	int num_object_models;
 	int num_remove_models;
 	int i;
-	int model;
 	int modelusage[MAX_MODELS];
 	int modelremoves[MAX_MODELS];
-	float midx, midy;
-	int data_index;
+	float minx, miny, minz;
+	float maxx, maxy, maxz;
+	float midx, midy, midz;
 	char *mapfilepath;
 	char *sadir;
-	struct OBJECT {
-		float x, y, z, rx, ry, rz, drawdistance;
+	struct {
+		int version;
+		int numremoves;
+		int numobjects;
+		int numzones;
+		float streamin;
+		float streamout;
+		float drawdistance;
+	} header;
+	struct {
+		int model;
+		float x, y, z, rx, ry, rz;
 	} object;
-	struct REMOVEDBUILDING {
+	struct {
+		int model;
 		float x, y, z, radius;
 	} remove;
+	struct {
+		float west, south, east, north;
+		int color;
+	} zone;
 
 	memset(&modelusage, 0, sizeof(modelusage));
 	memset(&modelremoves, 0, sizeof(modelremoves));
@@ -190,73 +201,84 @@ int main(int argc, char **argv)
 	}
 
 	if (!(file = fopen(mapfilepath, "rb"))) {
-		puts("failed to read file");
+		puts("failed to open file for reading");
 		return 1;
 	}
 
-	if (fread(&spec_version, 4, 1, file) != 1) {
+	if (fread(&header, sizeof(header), 1, file) != 1) {
 		goto corrupted;
 	}
 
-	printf(".map file version %d\n", spec_version);
+	printf(".map file version %08X\n", header.version);
 
-	if (fread(&num_removes, 4, 1, file) != 1) {
-		goto corrupted;
+	if (header.version != 0x0250414D) {
+		puts("version unsupported");
+		goto ret;
 	}
 
-	printf("remove count: %d\n", num_removes);
+	puts("header");
+	printf("  version %08X\n", header.version);
+	printf("  %d removes\n", header.numremoves);
+	printf("  %d objects\n", header.numobjects);
+	printf("  %d zones\n", header.numzones);
+	printf("  streamdistance in  %.0f\n", header.streamin);
+	printf("  streamdistance out %.0f\n", header.streamout);
+	printf("  drawdistance %.0f\n", header.drawdistance);
+	puts("");
 
-	if (fread(&num_objects, 4, 1, file) != 1) {
-		goto corrupted;
-	}
 
-	printf("object count: %d\n", num_objects);
+	minx = miny = minz = 0x7F800000;
+	maxx = maxy = maxz = -0x7F800000;
+	midx = midy = midz = 0.0f;
 
-	data_index = 0;
-	read_objects = 0;
-	read_removes = 0;
-	midx = 0.0f;
-	midy = 0.0f;
-	while (fread(&model, 4, 1, file)) {
-		if (model < -19999 || 19999 < model) {
-			printf("invalid model at index %d: %d\n", data_index, model);
+	for (i = 0; i < header.numremoves; i++) {
+		if (!fread(&remove, sizeof(remove), 1, file)) {
+			printf("EOF while reading remove %i\n", i);
 			goto corrupted;
 		}
-		if (model < 0) {
-			read_removes++;
-			modelremoves[-model]++;
-			if (fread(&remove, sizeof(remove), 1, file) != 1) {
-				puts("unexpected EOF while reading removed building data");
-				goto corrupted;
-			}
-		} else {
-			read_objects++;
-			modelusage[model]++;
-			if (fread(&object, sizeof(object), 1, file) != 1) {
-				puts("unexpected EOF while reading object data");
-				goto corrupted;
-			}
-			midx += object.x;
-			midy += object.y;
-			printf("CreateObject(%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f);\n",
-			model, object.x, object.y, object.z, object.rx, object.ry, object.rz, object.drawdistance);
+		if (remove.model < 611 || 19999 < remove.model) {
+			printf("invalid remove model %d at index %d\n", remove.model, i);
 		}
-		data_index++;
-	}
-	if (read_objects > 0) {
-		midx /= read_objects;
-		midy /= read_objects;
+		modelremoves[remove.model]++;
 	}
 
-	if (read_objects != num_objects) {
-		printf("file header said %d objects but %d were found\n", num_objects, read_objects);
+	for (i = 0; i < header.numobjects; i++) {
+		if (!fread(&object, sizeof(object), 1, file)) {
+			printf("EOF while reading object %i\n", i);
+			goto corrupted;
+		}
+		if (object.model < 611 || 19999 < object.model) {
+			printf("invalid object model %d at index %d\n", object.model, i);
+		}
+		modelusage[object.model]++;
+		midx += object.x;
+		midy += object.y;
+		midz += object.z;
+		if (object.x < minx) minx = object.x;
+		if (object.y < miny) miny = object.y;
+		if (object.z < minz) minz = object.z;
+		if (object.x > maxx) maxx = object.x;
+		if (object.y > maxy) maxy = object.y;
+		if (object.z > maxz) maxz = object.z;
 	}
 
-	if (read_removes != num_removes) {
-		printf("file header said %d removes but %d were found\n", num_removes, read_removes);
+	for (i = 0; i < header.numzones; i++) {
+		if (!fread(&zone, sizeof(zone), 1, file)) {
+			printf("EOF while reading zone %i\n", i);
+			goto corrupted;
+		}
 	}
 
-	printf("middle: %.2f %.2f\n", midx, midy);
+	if (fread(&header, 1, 1, file)) {
+		puts("extra data at end of file");
+		goto corrupted;
+	}
+
+	if (header.numobjects > 0) {
+		midx /= header.numobjects;
+		midy /= header.numobjects;
+		midz /= header.numobjects;
+	}
 
 	num_object_models = 0;
 	num_remove_models = 0;
@@ -268,25 +290,35 @@ int main(int argc, char **argv)
 			num_remove_models++;
 		}
 	}
-	printf("%d different object models used\n", num_object_models);
-	printf("%d different remove models used\n", num_remove_models);
 
-	if (read_objects > 0 && sadir) {
+	puts("removes");
+	printf("  %d different remove models used\n", num_remove_models);
+	puts("");
+
+	puts("objects");
+	printf("  middle: %.2f %.2f %.2f\n", midx, midy, midz);
+	printf("  min: %.2f %.2f %.2f\n", minx, miny, minz);
+	printf("  max: %.2f %.2f %.2f\n", maxx, maxy, maxz);
+	printf("  %d different object models used\n", num_object_models);
+	puts("");
+
+	if (header.numobjects > 0 && sadir) {
 		ide_load(sadir);
+		puts("object models");
 		for (i = 0; i < MAX_MODELS; i++) {
 			if (modelusage[i]) {
-				printf("%03dx %05d %s\n", modelusage[i], i, modelNames[i]);
+				printf("  %03dx %s\n", modelusage[i], modelNames[i]);
 			}
 		}
 	}
 
-end:
+ret:
 	fclose(file);
 	puts("\npress any key to exit");
-	getch();
+	getchar();
 
 	return 0;
 corrupted:
 	puts("file data seems to be corrupted");
-	goto end;
+	goto ret;
 }

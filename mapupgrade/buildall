@@ -1,0 +1,1 @@
+gcc -Wall -x c 01to02.c -o 01to02.exe
