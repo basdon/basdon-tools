@@ -94,7 +94,9 @@ int main(int argc, char **argv)
 			if (!fread(data.data + 1, sizeof(data.removev1) - sizeof(data.model), 1, in)) {
 				goto corrupted;
 			}
-			data.model = -data.model;
+			if (data.model != -1) {
+				data.model = -data.model;
+			}
 			fwrite(&data.removev2, sizeof(data.removev2), 1, out);
 		} else {
 			if (!fread(data.data + 1, sizeof(data.objectv1) - sizeof(data.model), 1, in)) {
