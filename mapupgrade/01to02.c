@@ -103,7 +103,7 @@ int main(int argc, char **argv)
 		}
 	}
 
-	if (!fseek(in, sizeof(headerv1), SEEK_SET)) {
+	if (fseek(in, sizeof(headerv1), SEEK_SET)) {
 		puts("failed to fseek");
 		result = 1;
 		goto ret;
