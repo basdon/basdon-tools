@@ -36,3 +36,10 @@ mapupgr01to02
 upgrades a mapfile from v1 to v2
 
 $ mapupgr01to02 from.map to.map
+
+textinfo
+========
+
+shows info
+
+$ textinfo a.text
