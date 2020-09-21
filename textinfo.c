@@ -45,6 +45,7 @@ int main(int argc, char **argv)
 {
 	FILE *file;
 	int version;
+	int sizeread;
 
 	if (argc != 2) {
 		puts("please give .text file as argument");
@@ -67,7 +68,7 @@ int main(int argc, char **argv)
 		goto ret;
 	}
 
-	while (fread(&text, sizeof(text), 1, file)) {
+	while ((sizeread = fread(&text, 1, sizeof(text), file)) == sizeof(text)) {
 		printf("text '%s'\n", text.name);
 		printf("  flags %02X:", text.flags);
 		if (text.flags & FLAG_BOX) {
@@ -103,7 +104,7 @@ int main(int argc, char **argv)
 		puts("");
 	}
 
-	if (!feof(file)) {
+	if (sizeread || !feof(file)) {
 		puts("extra data at the end of the file");
 		goto corrupted;
 	}
