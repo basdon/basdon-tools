@@ -151,17 +151,21 @@ void ide_load(char *sadir)
 	}
 }
 
+#define MAX_COLORS 1000
 int main(int argc, char **argv)
 {
 	FILE *file;
 	int num_object_models;
 	int num_remove_models;
-	int i;
+	int i, j;
 	int modelusage[MAX_MODELS];
 	int modelremoves[MAX_MODELS];
 	float minx, miny, minz;
 	float maxx, maxy, maxz;
 	float midx, midy, midz;
+	int zone_color[MAX_COLORS];
+	int zone_color_usage[MAX_COLORS];
+	int num_zone_colors;
 	char *mapfilepath;
 	char *sadir;
 	struct {
@@ -262,11 +266,27 @@ int main(int argc, char **argv)
 		if (object.z > maxz) maxz = object.z;
 	}
 
+	num_zone_colors = 0;
 	for (i = 0; i < header.numzones; i++) {
 		if (!fread(&zone, sizeof(zone), 1, file)) {
 			printf("EOF while reading zone %i\n", i);
 			goto corrupted;
 		}
+		for (j = 0; j < num_zone_colors; j++) {
+			if (zone_color[j] == zone.color) {
+				zone_color_usage[j]++;
+				goto nextzone;
+			}
+			if (num_zone_colors == MAX_COLORS) {
+				printf("too many zone colors\n");
+				goto corrupted;
+			}
+		}
+		zone_color[num_zone_colors] = zone.color;
+		zone_color_usage[num_zone_colors] = 1;
+		num_zone_colors++;
+nextzone:
+		;
 	}
 
 	if (fread(&header, 1, 1, file)) {
@@ -312,11 +332,25 @@ int main(int argc, char **argv)
 		}
 	}
 
+	puts("zones");
+	printf("  num: %d\n", header.numzones);
+	puts("  colors:");
+	while (num_zone_colors) {
+		j = 0;
+		for (i = 0; i < num_zone_colors; i++) {
+			if (zone_color_usage[i] > zone_color_usage[j]) {
+				j = i;
+			}
+		}
+		printf("    %08x: %dx\n", zone_color[j], zone_color_usage[j]);
+		num_zone_colors--;
+		zone_color_usage[j] = zone_color_usage[num_zone_colors];
+		zone_color[j] = zone_color[num_zone_colors];
+	}
+	puts("");
+
 ret:
 	fclose(file);
-	puts("\npress any key to exit");
-	getchar();
-
 	return 0;
 corrupted:
 	puts("file data seems to be corrupted");
