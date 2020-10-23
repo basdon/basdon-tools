@@ -160,6 +160,9 @@ int main(int argc, char **argv)
 	int i, j;
 	int modelusage[MAX_MODELS];
 	int modelremoves[MAX_MODELS];
+	int total_read_object_size;
+	int num_objects_with_materials;
+	int total_materials;
 	float minx, miny, minz;
 	float maxx, maxy, maxz;
 	float midx, midy, midz;
@@ -168,18 +171,26 @@ int main(int argc, char **argv)
 	int num_zone_colors;
 	char *mapfilepath;
 	char *sadir;
+#pragma pack(push,1)
 	struct {
 		int version;
 		int numremoves;
 		int numobjects;
+		int objectdata_size;
 		int numzones;
 		float streamin;
 		float streamout;
 		float drawdistance;
 	} header;
 	struct {
+		short objectdata_size;
 		int model;
 		float x, y, z, rx, ry, rz;
+		float drawdistance;
+		char no_camera_col;
+		short attached_object;
+		short attached_vehicle;
+		char num_materials;
 	} object;
 	struct {
 		int model;
@@ -189,6 +200,11 @@ int main(int argc, char **argv)
 		float west, south, east, north;
 		int color;
 	} zone;
+#pragma pack(pop)
+	char bigbuffer[1000];
+	int dword;
+	short word;
+	char byte, material_type;
 
 	memset(&modelusage, 0, sizeof(modelusage));
 	memset(&modelremoves, 0, sizeof(modelremoves));
@@ -215,7 +231,7 @@ int main(int argc, char **argv)
 
 	printf(".map file version %08X\n", header.version);
 
-	if (header.version != 0x0250414D) {
+	if (header.version != 0x0350414D) {
 		puts("version unsupported");
 		goto ret;
 	}
@@ -224,6 +240,7 @@ int main(int argc, char **argv)
 	printf("  version %08X\n", header.version);
 	printf("  %d removes\n", header.numremoves);
 	printf("  %d objects\n", header.numobjects);
+	printf("  %d objectdata_size\n", header.objectdata_size);
 	printf("  %d zones\n", header.numzones);
 	printf("  streamdistance in  %.0f\n", header.streamin);
 	printf("  streamdistance out %.0f\n", header.streamout);
@@ -244,26 +261,6 @@ int main(int argc, char **argv)
 			printf("invalid remove model %d at index %d\n", remove.model, i);
 		}
 		modelremoves[remove.model]++;
-	}
-
-	for (i = 0; i < header.numobjects; i++) {
-		if (!fread(&object, sizeof(object), 1, file)) {
-			printf("EOF while reading object %i\n", i);
-			goto corrupted;
-		}
-		if (object.model < 611 || 19999 < object.model) {
-			printf("invalid object model %d at index %d\n", object.model, i);
-		}
-		modelusage[object.model]++;
-		midx += object.x;
-		midy += object.y;
-		midz += object.z;
-		if (object.x < minx) minx = object.x;
-		if (object.y < miny) miny = object.y;
-		if (object.z < minz) minz = object.z;
-		if (object.x > maxx) maxx = object.x;
-		if (object.y > maxy) maxy = object.y;
-		if (object.z > maxz) maxz = object.z;
 	}
 
 	num_zone_colors = 0;
@@ -287,6 +284,81 @@ int main(int argc, char **argv)
 		num_zone_colors++;
 nextzone:
 		;
+	}
+
+	total_materials = 0;
+	num_objects_with_materials = 0;
+	total_read_object_size = 0;
+	for (i = 0; i < header.numobjects; i++) {
+		if (!fread(&object, sizeof(object), 1, file)) {
+			printf("EOF while reading object %i\n", i);
+			goto corrupted;
+		}
+		if (object.model < 611 || 19999 < object.model) {
+			printf("invalid object model %d at index %d\n", object.model, i);
+			if (object.model < 0 || 1999 < object.model) {
+				goto corrupted;
+			}
+		}
+		total_read_object_size += object.objectdata_size;
+		modelusage[object.model]++;
+		midx += object.x;
+		midy += object.y;
+		midz += object.z;
+		if (object.x < minx) minx = object.x;
+		if (object.y < miny) miny = object.y;
+		if (object.z < minz) minz = object.z;
+		if (object.x > maxx) maxx = object.x;
+		if (object.y > maxy) maxy = object.y;
+		if (object.z > maxz) maxz = object.z;
+		total_materials += object.num_materials;
+		if (object.num_materials > 0) {
+			num_objects_with_materials++;
+			for (j = 0; j < object.num_materials; j++) {
+				if (!fread(&material_type, sizeof(material_type), 1, file)) {
+					printf("while reading object %d material %d type\n", i, j);
+					goto corrupted;
+				}
+				if (!fread(&byte, sizeof(byte), 1, file)) {
+					printf("while reading object %d material %d index\n", i, j);
+					goto corrupted;
+				}
+				if (material_type == 1) {
+					if (!fread(&word, sizeof(word), 1, file)) {
+						printf("while reading object %d material %d model id\n", i, j);
+						goto corrupted;
+					}
+					if (!fread(&byte, sizeof(byte), 1, file)) {
+						printf("while reading object %d material %d txd len\n", i, j);
+						goto corrupted;
+					}
+					if (!fread(bigbuffer, byte, 1, file)) {
+						printf("while reading object %d material %d txd\n", i, j);
+						goto corrupted;
+					}
+					if (!fread(&byte, sizeof(byte), 1, file)) {
+						printf("while reading object %d material %d texture len\n", i, j);
+						goto corrupted;
+					}
+					if (!fread(bigbuffer, byte, 1, file)) {
+						printf("while reading object %d material %d texture\n", i, j);
+						goto corrupted;
+					}
+					if (!fread(&dword, sizeof(dword), 1, file)) {
+						printf("while reading object %d material %d color\n", i, j);
+						goto corrupted;
+					}
+				} else {
+					puts("unsupported material type");
+					goto corrupted;
+				}
+			}
+		}
+	}
+
+	if (total_read_object_size != header.objectdata_size) {
+		printf("expected total object size of %d but read %d\n", header.objectdata_size, total_read_object_size);
+		goto corrupted;
 	}
 
 	if (fread(&header, 1, 1, file)) {
@@ -320,6 +392,7 @@ nextzone:
 	printf("  min: %.2f %.2f %.2f\n", minx, miny, minz);
 	printf("  max: %.2f %.2f %.2f\n", maxx, maxy, maxz);
 	printf("  %d different object models used\n", num_object_models);
+	printf("  %d objects with %d custom materials\n", num_objects_with_materials, total_materials);
 	puts("");
 
 	if (header.numobjects > 0 && sadir) {
@@ -353,6 +426,6 @@ ret:
 	fclose(file);
 	return 0;
 corrupted:
-	puts("file data seems to be corrupted");
+	printf("file data seems to be corrupted %s\n", mapfilepath);
 	goto ret;
 }

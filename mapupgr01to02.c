@@ -48,7 +48,7 @@ int main(int argc, char **argv)
 	} data;
 #pragma pack(pop)
 
-	result = 0;
+	result = 1;
 
 	if (argc < 3) {
 		puts("need inputfile and outputfile");
@@ -107,7 +107,6 @@ int main(int argc, char **argv)
 
 	if (fseek(in, sizeof(headerv1), SEEK_SET)) {
 		puts("failed to fseek");
-		result = 1;
 		goto ret;
 	}
 skipremoves:
@@ -124,6 +123,8 @@ skipremoves:
 			fwrite(&data.objectv2, sizeof(data.objectv2), 1, out);
 		}
 	}
+
+	result = 0;
 
 ret:
 	fclose(in);

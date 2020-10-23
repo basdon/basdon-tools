@@ -37,6 +37,13 @@ upgrades a mapfile from v1 to v2
 
 $ mapupgr01to02 from.map to.map
 
+mapupgr02to03
+=============
+
+upgrades a mapfile from v2 to v3
+
+$ mapupgr02to03 from.map to.map
+
 textinfo
 ========
 
