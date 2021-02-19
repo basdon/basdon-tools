@@ -8,31 +8,29 @@ int main(int argc, char *argv[])
 	int linenum = 0;
 	int result = 0;
 #pragma pack(push,1)
-	union {
-		char buf[28];
-		struct {
-			int version;
-			int numremoveobj;
-			int numobj;
-			int numgang;
-			float streamin;
-			float streamout;
-			float drawdistance;
-		} data;
+	struct {
+		int version;
+		int numremoveobj;
+		int numobj;
+		int objdata_size;
+		int numgang;
+		float streamin;
+		float streamout;
+		float drawdistance;
 	} memheader;
-	union {
-		char buf[28];
-		struct {
-			int model;
-			float x, y, z, rx, ry, rz;
-		} data;
+	struct {
+		short objdata_size;
+		int model;
+		float x, y, z, rx, ry, rz;
+		float drawdistance;
+		char nocameracol;
+		short attached_object_id;
+		short attached_vehicle_id;
+		char num_materials;
 	} memobject;
-	union {
-		char buf[20];
-		struct {
-			int model;
-			float x, y, z, radius;
-		} data;
+	struct {
+		int model;
+		float x, y, z, radius;
 	} memremove;
 #pragma pack(pop)
 
@@ -48,22 +46,24 @@ int main(int argc, char *argv[])
 	}
 
 
-	memheader.data.version = 0x0250414D;
-	if (memheader.buf[0] != 'M' || memheader.buf[3] != 2) {
+	memheader.version = 0x0350414D;
+	if (((char*) &memheader)[0] != 'M' || ((char*) &memheader)[3] != 3) {
 		puts("wrong endianness or structs are packed");
 		result = 2;
 		goto ret;
 	}
-	memheader.data.numremoveobj = -1;
-	memheader.data.numobj = -1;
-	memheader.data.numgang = -1;
-	memheader.data.streamin = 500.0f;
-	memheader.data.streamout = 600.0f;
-	memheader.data.drawdistance = 500.0f;
-	fwrite(memheader.buf, sizeof(memheader.buf), 1, ofile);
-	memheader.data.numremoveobj = 0;
-	memheader.data.numobj = 0;
-	memheader.data.numgang = 0;
+	memheader.numremoveobj = -1;
+	memheader.numobj = -1;
+	memheader.objdata_size = -1;
+	memheader.numgang = -1;
+	memheader.streamin = 2500.0f;
+	memheader.streamout = 4000.0f;
+	memheader.drawdistance = 1500.0f;
+	fwrite(&memheader, sizeof(memheader), 1, ofile);
+	memheader.numremoveobj = 0;
+	memheader.numobj = 0;
+	memheader.objdata_size = 0;
+	memheader.numgang = 0;
 
 	while (fgets(line, sizeof(line), stdin) != 0) {
 		linenum++;
@@ -80,26 +80,33 @@ int main(int argc, char *argv[])
 		}
 		if (7 == sscanf(line,
 			"CreateObject(%d,%f,%f,%f,%f,%f,%f);\n",
-			&memobject.data.model,
-			&memobject.data.x,
-			&memobject.data.y,
-			&memobject.data.z,
-			&memobject.data.rx,
-			&memobject.data.ry,
-			&memobject.data.rz))
+			&memobject.model,
+			&memobject.x,
+			&memobject.y,
+			&memobject.z,
+			&memobject.rx,
+			&memobject.ry,
+			&memobject.rz))
 		{
-			fwrite(memobject.buf, sizeof(memobject.buf), 1, ofile);
-			memheader.data.numobj++;
+			memobject.objdata_size = sizeof(memobject);
+			memobject.drawdistance = memheader.drawdistance;
+			memobject.nocameracol = 0;
+			memobject.attached_object_id = -1;
+			memobject.attached_vehicle_id = -1;
+			memobject.num_materials = 0;
+			fwrite(&memobject, sizeof(memobject), 1, ofile);
+			memheader.objdata_size += memobject.objdata_size;
+			memheader.numobj++;
 		} else if (5 == sscanf(line,
 			"RemoveBuildingForPlayer(playerid,%d,%f,%f,%f,%f);\n",
-			&memremove.data.model,
-			&memremove.data.x,
-			&memremove.data.y,
-			&memremove.data.z,
-			&memremove.data.radius))
+			&memremove.model,
+			&memremove.x,
+			&memremove.y,
+			&memremove.z,
+			&memremove.radius))
 		{
-			fwrite(memremove.buf, sizeof(memremove.buf), 1, ofile);
-			memheader.data.numremoveobj++;
+			fwrite(&memremove, sizeof(memremove), 1, ofile);
+			memheader.numremoveobj++;
 		} else {
 			printf("invalid input on line %d: %s\n", linenum, line);
 		}
@@ -109,7 +116,7 @@ int main(int argc, char *argv[])
 		fputs("failed to rewrite header", stderr);
 		result = 1;
 	}
-	fwrite(memheader.buf, sizeof(memheader.buf), 1, ofile);
+	fwrite(&memheader, sizeof(memheader), 1, ofile);
 
 ret:
 	fclose(ofile);
