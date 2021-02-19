@@ -4,6 +4,7 @@
 
 #define MAX_MODELS 20000
 
+char ides_loaded;
 char *modelNames[MAX_MODELS];
 static char names[MAX_MODELS * 20];
 static char *nameptr;
@@ -137,7 +138,8 @@ done:
 	return amount;
 }
 
-void ide_load(char *sadir)
+static
+int ide_load(char *sadir)
 {
 	char file[500];
 	int i, num;
@@ -149,10 +151,13 @@ void ide_load(char *sadir)
 		sprintf(file, "%s/%s", sadir, files[i++]);
 		num += ide_load_file(file);
 	}
+	ides_loaded = 1;
+	return num > 0;
 }
 
 #define MAX_COLORS 1000
-int main(int argc, char **argv)
+static
+int mapinfo(char *filename, char do_dump, char skip_materials)
 {
 	FILE *file;
 	int num_object_models;
@@ -169,8 +174,6 @@ int main(int argc, char **argv)
 	int zone_color[MAX_COLORS];
 	int zone_color_usage[MAX_COLORS];
 	int num_zone_colors;
-	char *mapfilepath;
-	char *sadir;
 #pragma pack(push,1)
 	struct {
 		int version;
@@ -204,23 +207,13 @@ int main(int argc, char **argv)
 	char bigbuffer[1000];
 	int dword;
 	short word;
-	char byte, material_type;
+	unsigned char byte;
+	char material_type;
 
 	memset(&modelusage, 0, sizeof(modelusage));
 	memset(&modelremoves, 0, sizeof(modelremoves));
 
-	if (argc == 3) {
-		sadir = argv[1];
-		mapfilepath = argv[2];
-	} else if (argc > 1) {
-		sadir = 0;
-		mapfilepath = argv[1];
-	} else {
-		puts("please give .map file as argument");
-		return 1;
-	}
-
-	if (!(file = fopen(mapfilepath, "rb"))) {
+	if (!(file = fopen(filename, "rb"))) {
 		puts("failed to open file for reading");
 		return 1;
 	}
@@ -229,7 +222,10 @@ int main(int argc, char **argv)
 		goto corrupted;
 	}
 
-	printf(".map file version %08X\n", header.version);
+	puts("/*");
+	printf("%s\n", filename);
+	printf("  .map file version %08X\n", header.version);
+	puts("");
 
 	if (header.version != 0x0350414D) {
 		puts("version unsupported");
@@ -252,16 +248,22 @@ int main(int argc, char **argv)
 	maxx = maxy = maxz = -0x7F800000;
 	midx = midy = midz = 0.0f;
 
+	puts("*/");
 	for (i = 0; i < header.numremoves; i++) {
 		if (!fread(&remove, sizeof(remove), 1, file)) {
 			printf("EOF while reading remove %i\n", i);
 			goto corrupted;
 		}
 		if (remove.model != -1 && (remove.model < 611 || 19999 < remove.model)) {
-			printf("invalid remove model %d at index %d\n", remove.model, i);
+			printf("// invalid remove model %d at index %d\n", remove.model, i);
+		}
+		if (do_dump) {
+			printf("RemoveBuildingForPlayer(playerid,%d,%.4f,%.4f,%.4f,%.8f);\n",
+				remove.model, remove.x, remove.y, remove.z, remove.radius);
 		}
 		modelremoves[remove.model]++;
 	}
+	puts("/*");
 
 	num_zone_colors = 0;
 	for (i = 0; i < header.numzones; i++) {
@@ -286,6 +288,7 @@ nextzone:
 		;
 	}
 
+	puts("*/");
 	total_materials = 0;
 	num_objects_with_materials = 0;
 	total_read_object_size = 0;
@@ -295,10 +298,18 @@ nextzone:
 			goto corrupted;
 		}
 		if (object.model < 611 || 19999 < object.model) {
-			printf("invalid object model %d at index %d\n", object.model, i);
+			printf("// invalid object model %d at index %d\n", object.model, i);
 			if (object.model < 0 || 1999 < object.model) {
 				goto corrupted;
 			}
+		}
+		if (do_dump) {
+			if (object.num_materials && !skip_materials) {
+				printf("new o%d=", i);
+			}
+			printf("CreateObject(%d,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f);\n",
+				object.model, object.x, object.y, object.z,
+				object.rx, object.ry, object.rz, object.drawdistance);
 		}
 		total_read_object_size += object.objectdata_size;
 		modelusage[object.model]++;
@@ -328,6 +339,9 @@ nextzone:
 						printf("while reading object %d material %d model id\n", i, j);
 						goto corrupted;
 					}
+					if (do_dump && !skip_materials) {
+						printf("SetObjectMaterial(o%d,%d,%d", i, byte, word);
+					}
 					if (!fread(&byte, sizeof(byte), 1, file)) {
 						printf("while reading object %d material %d txd len\n", i, j);
 						goto corrupted;
@@ -335,6 +349,10 @@ nextzone:
 					if (!fread(bigbuffer, byte, 1, file)) {
 						printf("while reading object %d material %d txd\n", i, j);
 						goto corrupted;
+					}
+					if (do_dump && !skip_materials) {
+						bigbuffer[byte] = 0;
+						printf(",\"%s\"", bigbuffer);
 					}
 					if (!fread(&byte, sizeof(byte), 1, file)) {
 						printf("while reading object %d material %d texture len\n", i, j);
@@ -344,9 +362,16 @@ nextzone:
 						printf("while reading object %d material %d texture\n", i, j);
 						goto corrupted;
 					}
+					if (do_dump && !skip_materials) {
+						bigbuffer[byte] = 0;
+						printf(",\"%s\"", bigbuffer);
+					}
 					if (!fread(&dword, sizeof(dword), 1, file)) {
 						printf("while reading object %d material %d color\n", i, j);
 						goto corrupted;
+					}
+					if (do_dump && !skip_materials) {
+						printf(",0x%08X);\n", dword);
 					}
 				} else {
 					puts("unsupported material type");
@@ -355,6 +380,7 @@ nextzone:
 			}
 		}
 	}
+	puts("/*\n");
 
 	if (total_read_object_size != header.objectdata_size) {
 		printf("expected total object size of %d but read %d\n", header.objectdata_size, total_read_object_size);
@@ -388,15 +414,17 @@ nextzone:
 	puts("");
 
 	puts("objects");
-	printf("  middle: %.2f %.2f %.2f\n", midx, midy, midz);
-	printf("  min: %.2f %.2f %.2f\n", minx, miny, minz);
-	printf("  max: %.2f %.2f %.2f\n", maxx, maxy, maxz);
+	if (header.numobjects) {
+		printf("  middle: %.2f %.2f %.2f\n", midx, midy, midz);
+		printf("  min: %.2f %.2f %.2f\n", minx, miny, minz);
+		printf("  max: %.2f %.2f %.2f\n", maxx, maxy, maxz);
+		printf("  area: %.2f %.2f %.2f\n", maxx - minx, maxy - miny, maxz - minz);
+	}
 	printf("  %d different object models used\n", num_object_models);
 	printf("  %d objects with %d custom materials\n", num_objects_with_materials, total_materials);
 	puts("");
 
-	if (header.numobjects > 0 && sadir) {
-		ide_load(sadir);
+	if (header.numobjects > 0 && ides_loaded) {
 		puts("object models");
 		for (i = 0; i < MAX_MODELS; i++) {
 			if (modelusage[i]) {
@@ -420,12 +448,59 @@ nextzone:
 		zone_color_usage[j] = zone_color_usage[num_zone_colors];
 		zone_color[j] = zone_color[num_zone_colors];
 	}
-	puts("");
+	puts("*/");
 
 ret:
 	fclose(file);
 	return 0;
 corrupted:
-	printf("file data seems to be corrupted %s\n", mapfilepath);
+	printf("file data seems to be corrupted %s\n", filename);
 	goto ret;
+}
+
+int main(int argc, char **argv)
+{
+	int i;
+	char do_dump, nomats;
+	char **filev;
+	unsigned char filec;
+
+	if (!argc) {
+		goto printhelp;
+	}
+	do_dump = 0;
+	nomats = 0;
+	filev = alloca(sizeof(char*) * argc);
+	filec = 0;
+	for (i = 1; i < argc; i++) {
+		if (!strcmp(argv[i], "--sadir")) {
+			if (i == argc - 1) {
+				goto printhelp;
+			}
+			i++;
+			if (!ide_load(argv[i])) {
+				puts("bad game dir");
+				return 1;
+			}
+		} else if (!strcmp(argv[i], "--dump")) {
+			do_dump = 1;
+		} else if (!strcmp(argv[i], "--nomats")) {
+			nomats = 1;
+		} else {
+			filev[filec] = argv[i];
+			filec++;
+		}
+	}
+	if (!filec) {
+		goto printhelp;
+	}
+	for (i = 0; i < filec; i++) {
+		if (mapinfo(filev[i], do_dump, nomats)) {
+			return 1;
+		}
+	}
+	return 0;
+printhelp:
+	puts("mapinfo [--sadir /path/to/game/dir] [--dump] [--nomats] map1.map [map2.map] [...]");
+	return 1;
 }
