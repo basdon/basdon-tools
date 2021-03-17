@@ -243,7 +243,6 @@ int mapinfo(char *filename, char do_dump, char skip_materials)
 	printf("  drawdistance %.0f\n", header.drawdistance);
 	puts("");
 
-
 	minx = miny = minz = 0x7F800000;
 	maxx = maxy = maxz = -0x7F800000;
 	midx = midy = midz = 0.0f;
@@ -421,7 +420,7 @@ nextzone:
 		printf("  area: %.2f %.2f %.2f\n", maxx - minx, maxy - miny, maxz - minz);
 	}
 	printf("  %d different object models used\n", num_object_models);
-	printf("  %d objects with %d custom materials\n", num_objects_with_materials, total_materials);
+	printf("  %d textured objects with %d custom materials\n", num_objects_with_materials, total_materials);
 	puts("");
 
 	if (header.numobjects > 0 && ides_loaded) {

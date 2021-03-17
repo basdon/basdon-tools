@@ -1,6 +1,9 @@
-gcc -Wall -x c mapcombine.c -o mapcombine
-gcc -Wall -x c mapconvert.c -o mapconvert
-gcc -Wall -x c mapinfo.c -o mapinfo
-gcc -Wall -x c mapupgr01to02.c -o mapupgr01to02
-gcc -Wall -x c mapupgr02to03.c -o mapupgr02to03
-gcc -Wall -x c textinfo.c -o textinfo
+(
+gcc -Wall -x c mapcombine.c -o mapcombine &&
+gcc -Wall -x c mapconvert.c -o mapconvert &&
+gcc -Wall -x c mapinfo.c -o mapinfo &&
+gcc -Wall -x c mapupgr01to02.c -o mapupgr01to02 &&
+gcc -Wall -x c mapupgr02to03.c -o mapupgr02to03 &&
+gcc -Wall -x c textinfo.c -o textinfo &&
+true
+) || (echo "" && echo "FAILED")
