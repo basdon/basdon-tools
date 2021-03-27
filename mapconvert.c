@@ -540,6 +540,9 @@ havenextchar:
 			goto nextchar;
 		}
 		if (c == '\n') {
+			if (!num_tokens) {
+				continue;
+			}
 			printf("%d: doesn't end in ;\n", line_number);
 			exit(1);
 		}
