@@ -238,6 +238,9 @@ int do_call(char *function, struct TOKEN **args, int num_args)
 		removes[num_removes].z = arg_value_float(args, 4);
 		removes[num_removes].radius = arg_value_float(args, 5);
 		return num_removes++;
+	} else if (!strcmp("SetDynamicObjectMaterialText", function)) {
+		printf("%d: ignoring %s\n", line_number, function);
+		return 0;
 	} else {
 		printf("%d: unknown function: %s\n", line_number, function);
 		exit(1);
