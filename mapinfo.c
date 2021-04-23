@@ -159,6 +159,8 @@ int ide_load(char *sadir)
 static
 int mapinfo(char *filename, char do_dump, char skip_materials)
 {
+	static int total_objects = 0;
+
 	FILE *file;
 	int num_object_models;
 	int num_remove_models;
@@ -304,7 +306,7 @@ nextzone:
 		}
 		if (do_dump) {
 			if (object.num_materials && !skip_materials) {
-				printf("new o%d=", i);
+				printf("new o%d=", total_objects + i);
 			}
 			printf("CreateObject(%d,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f);\n",
 				object.model, object.x, object.y, object.z,
@@ -380,6 +382,7 @@ nextzone:
 		}
 	}
 	puts("/*\n");
+	total_objects += header.numobjects;
 
 	if (total_read_object_size != header.objectdata_size) {
 		printf("expected total object size of %d but read %d\n", header.objectdata_size, total_read_object_size);
