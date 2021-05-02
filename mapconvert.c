@@ -38,7 +38,7 @@ static char object_texture_slot_used[MAX_OBJECTS][16];
 static struct OBJECT_MATERIAL_TEXTURE object_texture_data[MAX_OBJECTS][16];
 
 struct REMOVE {
-	unsigned short model_id;
+	int model_id;
 	float x, y, z;
 	float radius;
 };
@@ -196,7 +196,7 @@ int do_call(char *function, struct TOKEN **args, int num_args)
 		objects[num_objects].attached_vehicle_id = -1;
 		objects[num_objects].num_materials = 0;
 		return num_objects++;
-	} else if (!strcmp("SetDynamicObjectMaterial", function)) {
+	} else if (!strcmp("SetObjectMaterial", function) || !strcmp("SetDynamicObjectMaterial", function)) {
 		if (num_args != 6) {
 			printf("%d: need at 6 args for %s, got %d\n", line_number, function, num_args);
 			exit(1);
@@ -238,7 +238,7 @@ int do_call(char *function, struct TOKEN **args, int num_args)
 		removes[num_removes].z = arg_value_float(args, 4);
 		removes[num_removes].radius = arg_value_float(args, 5);
 		return num_removes++;
-	} else if (!strcmp("SetDynamicObjectMaterialText", function)) {
+	} else if (!strcmp("SetObjectMaterialText", function) || !strcmp("SetDynamicObjectMaterialText", function)) {
 		printf("%d: ignoring %s\n", line_number, function);
 		return 0;
 	} else {
@@ -287,8 +287,11 @@ void combine_minus_prefix_with_number()
 	}
 }
 
+/**
+@param out_toindex will be set to the index of the next token that should be parsed.
+*/
 static
-int sym_exec_tokens(int fromindex)
+int sym_exec_tokens(int fromindex, int *out_toindex)
 {
 	struct VARIABLE *variable;
 	struct TOKEN *call_args[MAX_TOKENS];
@@ -296,7 +299,7 @@ int sym_exec_tokens(int fromindex)
 	int i;
 
 	if (tokens[fromindex].type == T_IDENTIFIER) {
-		if (!strcmp("new", tokens[0].data.identifier_value)) {
+		if (!strcmp("new", tokens[fromindex].data.identifier_value)) {
 			if (fromindex != 0) {
 				printf("%d: 'new' as non-first token\n", line_number);
 				exit(1);
@@ -309,8 +312,9 @@ int sym_exec_tokens(int fromindex)
 			variable = register_variable(tokens[1].data.identifier_value);
 			dprintf("registered variable %s\n", variable->name);
 			if (num_tokens > 2) {
-				return variable->value = sym_exec_tokens(2);
+				return variable->value = sym_exec_tokens(2, out_toindex);
 			}
+			*out_toindex = 2;
 			return 0;
 		} else if (num_tokens > fromindex) {
 			if (tokens[fromindex + 1].type == T_EQ) {
@@ -320,7 +324,7 @@ int sym_exec_tokens(int fromindex)
 					exit(1);
 				}
 				variable = find_variable(tokens[fromindex].data.identifier_value);
-				variable->value = sym_exec_tokens(fromindex + 2);
+				variable->value = sym_exec_tokens(fromindex + 2, out_toindex);
 				dprintf("assigned variable %s to %d\n", variable->name, variable->value);
 				return variable->value;
 			} else if (tokens[fromindex + 1].type == T_LPAREN) {
@@ -334,16 +338,27 @@ int sym_exec_tokens(int fromindex)
 				for (i = fromindex + 2; i < num_tokens; i++) {
 					switch (tokens[i].type) {
 					case T_IDENTIFIER:
+						if (i + 1 < num_tokens && tokens[i + 1].type == T_LPAREN) {
+							dprintf("arg %d: functioncall\n", num_call_args);
+							/*functioncall as arg*/
+							call_args[num_call_args] = malloc(sizeof(struct TOKEN));
+							call_args[num_call_args]->type = T_INT;
+							call_args[num_call_args]->data.int_value = sym_exec_tokens(i, &i);
+							num_call_args++;
+							dprintf("token is now %d\n", i);
+							break;
+						}
 					case T_INT:
 					case T_FLOAT:
 					case T_STRING:
+						dprintf("arg %d: %s\n", num_call_args, token2string[tokens[i].type]);
 						call_args[num_call_args++] = &tokens[i];
+						i++;
 						break;
 					default:
 						printf("%d: unk token type %d as call arg\n", line_number, tokens[i].type);
 						exit(1);
 					}
-					i++;
 					if (i >= num_tokens) {
 						printf("%d: call ends without RPAREN\n", line_number);
 						exit(1);
@@ -352,28 +367,21 @@ int sym_exec_tokens(int fromindex)
 					case T_COMMA:
 						continue;
 					case T_RPAREN:
-						break;
+						*out_toindex = i + 1;
+						return do_call(tokens[fromindex].data.identifier_value, call_args, num_call_args);
 					default:
 						printf("%d: unexpected token type %d after call arg (num_args %d)\n", line_number, tokens[i].type, num_call_args);
 						exit(1);
 					}
-					break;
-				}
-				/*this is not really a parser*/
-				if (tokens[i].type != T_RPAREN) {
-					printf("%d: no ending RPAREN in functioncall (%d, num_args %d)\n", line_number, tokens[i].type, num_call_args);
+					printf("unreachable code?");
 					exit(1);
 				}
-				if (i != num_tokens - 1) {
-					printf("%d: stuff after functioncall\n", line_number);
-					exit(1);
-				}
-				return do_call(tokens[fromindex].data.identifier_value, call_args, num_call_args);
 			}
 		} else {
 			/*variable access*/
 			variable = find_variable(tokens[fromindex].data.identifier_value);
 			dprintf("accessing variable %s (value %d)\n", variable->name, variable->value);
+			*out_toindex = fromindex + 1;
 			return variable->value;
 		}
 	}
@@ -390,6 +398,7 @@ int parse()
 	int pos;
 	char is_int_hex;
 	int i;
+	int tmpidx;
 
 	for (i = 'a'; i <= 'z'; i++) {
 		charmap[i] |= IDENTIFIER_CHAR | IDENTIFIER_CHAR_NOTFIRST;
@@ -406,8 +415,8 @@ int parse()
 	for (i = 'A'; i <= 'F'; i++) {
 		charmap[i] |= HEX_NUMBER_CHAR;
 	}
-	charmap['_'] = IDENTIFIER_CHAR;
-	charmap['@'] = IDENTIFIER_CHAR;
+	charmap['_'] = IDENTIFIER_CHAR | IDENTIFIER_CHAR_NOTFIRST;
+	charmap['@'] = IDENTIFIER_CHAR | IDENTIFIER_CHAR_NOTFIRST;
 
 	line_number = 0;
 	while (fgets((char*) line, sizeof(line), stdin)) {
@@ -557,7 +566,13 @@ havenextchar:
 			pos++;
 			c = line[pos];
 		} while (c == ' ' || c == '\t');
-		if (c != '\n') {
+		if (c == '/' && line[pos + 1] == '/') {
+			do {
+				pos++;
+				c = line[pos];
+			} while (c && c != '\n');
+		}
+		if (c && c != '\n') {
 			printf("%d: stuff after ;\n", line_number);
 			exit(1);
 		}
@@ -566,7 +581,11 @@ havenextchar:
 		/*do the line*/
 		dprintf("executing line:\n");
 		if (num_tokens) {
-			sym_exec_tokens(0);
+			sym_exec_tokens(0, &tmpidx);
+			if (tmpidx != num_tokens) {
+				printf("%d: did not execute all tokens\n", line_number);
+				exit(1);
+			}
 		}
 		dprintf("\n");
 	}
