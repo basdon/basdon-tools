@@ -167,6 +167,7 @@ int mapinfo(char *filename, char do_dump, char skip_materials)
 	int i, j;
 	int modelusage[MAX_MODELS];
 	int modelremoves[MAX_MODELS];
+	int wildcardremoves;
 	int total_read_object_size;
 	int num_objects_with_materials;
 	int total_materials;
@@ -214,6 +215,7 @@ int mapinfo(char *filename, char do_dump, char skip_materials)
 
 	memset(&modelusage, 0, sizeof(modelusage));
 	memset(&modelremoves, 0, sizeof(modelremoves));
+	wildcardremoves = 0;
 
 	if (!(file = fopen(filename, "rb"))) {
 		puts("failed to open file for reading");
@@ -255,14 +257,18 @@ int mapinfo(char *filename, char do_dump, char skip_materials)
 			printf("EOF while reading remove %i\n", i);
 			goto corrupted;
 		}
-		if (remove.model != -1 && (remove.model < 611 || 19999 < remove.model)) {
-			printf("// invalid remove model %d at index %d\n", remove.model, i);
-		}
 		if (do_dump) {
 			printf("RemoveBuildingForPlayer(playerid,%d,%.4f,%.4f,%.4f,%.8f);\n",
 				remove.model, remove.x, remove.y, remove.z, remove.radius);
 		}
-		modelremoves[remove.model]++;
+		if (remove.model == -1) {
+			wildcardremoves++;
+		} else if (remove.model > 610 && remove.model < MAX_MODELS) {
+			modelremoves[remove.model]++;
+		} else {
+			printf("// invalid remove model %d at index %d\n", remove.model, i);
+			goto corrupted;
+		}
 	}
 	puts("/*");
 
@@ -412,7 +418,8 @@ nextzone:
 	}
 
 	puts("removes");
-	printf("  %d different remove models used\n", num_remove_models);
+	printf("  %d different remove models used (excluding wildcard)\n", num_remove_models);
+	printf("  %d wildcards removes\n", wildcardremoves);
 	puts("");
 
 	puts("objects");
