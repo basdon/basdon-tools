@@ -63,7 +63,7 @@ static char strpool[20000], *s = strpool;
 #define HEX_NUMBER_CHAR 8
 static unsigned char charmap[255];
 
-#define MAX_TOKENS 50
+#define MAX_TOKENS 150
 #define T_IDENTIFIER 1
 #define T_INT 2
 #define T_FLOAT 3
@@ -221,7 +221,7 @@ int do_call(char *function, struct TOKEN **args, int num_args)
 		object_texture_data[objectid][materialindex].texture_len = texturelen;
 		object_texture_data[objectid][materialindex].color = (unsigned int) arg_value_int(args, 5);
 		objects[objectid].num_materials++;
-		objects[objectid].objdata_size += sizeof(short) + sizeof(char) * 2 + txdlen + texturelen;
+		objects[objectid].objdata_size += 1 + 1 + 2 + 1 + txdlen + 1 + texturelen + 4;
 		return 0;
 	} else if (!strcmp("RemoveBuildingForPlayer", function)) {
 		if (num_args < 6) {
