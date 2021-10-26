@@ -380,6 +380,9 @@ nextzone:
 					if (do_dump && !skip_materials) {
 						printf(",0x%08X);\n", dword);
 					}
+					if (!do_dump && dword) {
+						printf("warn: object (with model %d) has non-zero color: %08X\n", object.model, dword);
+					}
 				} else {
 					puts("unsupported material type");
 					goto corrupted;
