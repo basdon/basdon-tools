@@ -149,6 +149,9 @@ static
 float arg_value_float(struct TOKEN **args, int position)
 {
 	/*TODO(?) float variables*/
+	if (args[position]->type == T_INT) {
+		return (float) args[position]->data.int_value;
+	}
 	if (args[position]->type != T_FLOAT) {
 		printf("%d: expected arg %d as float but is %c\n", line_number, position, args[position]->type);
 		exit(1);
